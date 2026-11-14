@@ -1,0 +1,84 @@
+# Scenarios
+
+Scenario files live in `backend/app/scenarios/data/*.json` and are validated against
+`backend/app/models/scenario.py` when the server starts (invalid files fail loudly).
+**All shipped data are illustrative.**
+
+## Shipped scenarios
+
+### `base_single_phase` — Base case
+
+A single oil producer in 1200 m water depth.
+
+| Item | Value (illustrative) |
+|---|---|
+| Fluid | ρ 850 kg/m³, μ 5 cP, c_p 2000 J/(kg·K), β 7e-4 1/K, bubble point 40 bara |
+| Reservoir | 380 bara, 95 °C at −3700 m TVDSS, PI 20 (m³/d)/bar |
+| Tubing | ID 100.5 mm, 1950 m below the SCSSV (−3700 → −1800 m) + 610 m above it (to the tree at −1195 m), U = 10 W/m²K, geothermal ambient 95 → 25.8 → 4 °C (linear 4 °C at the seabed to 95 °C at the reservoir) |
+| SCSSV-101 | Flapper, bore 100 mm, K 0.3, stroke 10 s, discrete |
+| PMV-101 / PWV-101 | Gate, bore 130 mm, K 0.1, stroke 30 s, discrete |
+| CHK-101 | Cv_max 100, equal-percentage R = 30, stroke 180 s, initially 30 % |
+| FL-101 | 5 km, ID 152.4 mm, ε 45 µm, rising 45 m to the manifold, U = 3 W/m²K, seabed 4 °C |
+| Boundary | Manifold / riser base at 60 bara (−1150 m) |
+| Training rule | Warn when opening an isolation valve against > 35 bar |
+
+Resulting operating point (calculated by the model, at 30 % choke): ≈ 985 m³/d,
+P_wf ≈ 331 bara, tree ≈ 116 bara, choke ΔP ≈ 51 bar, arrival ≈ 57 °C. With PWV closed the
+tree shut-in pressure is ≈ 171 bara (= P_res − ρgΔz).
+
+### `ex03_choke_operation` — Exercise 3
+
+`extends: base_single_phase` with the choke initially at 20 %.
+
+## File format
+
+```jsonc
+{
+  "id": "my_scenario",
+  "extends": "base_single_phase",          // optional: inherit and override
+  "name": "...", "description": "...",
+  "data_classification": "ILLUSTRATIVE - not field data",
+  "fluid":     { "model": "constant_property_liquid", "density_kg_m3": 850, ... },
+  "reservoir": { "pressure_bara": 380, "temperature_c": 95, "productivity_index_m3d_per_bar": 20 },
+  "boundary":  { "node": "N_ARR", "pressure_bara": 60, "fluid_temperature_c": 4 },
+  "reservoir_node": "RES",
+  "nodes":    [ { "id": "N_BH", "name": "...", "elevation_m": -3700 }, ... ],
+  "elements": [
+    { "id": "IPR", "type": "inflow", "from": "RES", "to": "N_BH", "name": "..." },
+    { "id": "TBG", "type": "pipe", "role": "tubing", "length_m": ..., "inner_diameter_m": ...,
+      "roughness_m": ..., "overall_htc_w_m2k": ..., "ambient_temperature_inlet_c": ...,
+      "ambient_temperature_outlet_c": ..., "thermal_cells": 20, ... },
+    { "id": "PMV", "type": "valve", "tag": "PMV-101", "valve_type": "master",
+      "bore_diameter_m": 0.13, "loss_coefficient_open": 0.1, "supports_intermediate": false,
+      "full_stroke_time_s": 30, "initial_position_pct": 100, "available": true, ... },
+    { "id": "CHOKE", "type": "choke", "tag": "CHK-101", "cv_max": 100,
+      "characteristic": "equal_percentage", "rangeability": 30, ... }
+  ],
+  "element_overrides": { "CHOKE": { "initial_position_pct": 20 } },   // with extends
+  "instruments": [
+    { "tag": "PT-101", "type": "pressure", "node": "N_TREE", "range_min": 0, "range_max": 690, "description": "..." },
+    { "tag": "PDT-101", "type": "differential_pressure", "high_node": "N_UC", "low_node": "N_DC", ... }
+  ],
+  "training_rules": { "max_opening_differential_bar": 35 },
+  "layout": { "width": 1200, "height": 520, "nodes": {...}, "waypoints": {...},
+              "instruments": {...}, "annotations": [...] }
+}
+```
+
+Rules enforced on load:
+
+* Elements must form one chain from `reservoir_node` to `boundary.node`, starting with
+  the single `inflow` element. No branches, loops or unused nodes.
+* Tags must be unique. Discrete valves start at 0 or 100 %.
+* A pipe's elevation change must not exceed its length.
+* Instrument ranges are in bara (pressure), bar (differential), °C, or m³/d.
+* `layout` is presentation only. Every node needs coordinates; `waypoints` bend
+  pipes; `annotations` add frames, the seabed line and labels.
+
+## Adding a scenario
+
+1. Copy or `extends` an existing file. Give it a new `id`.
+2. Keep `data_classification` truthful. Do not add confidential field data without
+   authorisation.
+3. Restart the backend (the catalogue is loaded once).
+4. Run `pytest`. `test_all_scenarios_build_and_solve` checks every scenario.
