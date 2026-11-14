@@ -1,0 +1,11 @@
+# Production-style local/internal-server run:  docker compose up --build
+# Then open http://localhost:8000
+services:
+  subseasim:
+    build: .
+    image: subseasim:0.1.0
+    ports:
+      - "8000:8000"
+    environment:
+      SUBSEASIM_MAX_SESSIONS: "50"
+    restart: unless-stopped

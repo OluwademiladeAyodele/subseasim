@@ -1,0 +1,9 @@
+{
+  "extends": "base_single_phase",
+  "id": "ex03_choke_operation",
+  "name": "Exercise 3 - Choke operation (illustrative)",
+  "description": "Base-case well with the production choke initially at 20 % opening. Used by training Exercise 3. All data are ILLUSTRATIVE.",
+  "element_overrides": {
+    "CHOKE": {"initial_position_pct": 20}
+  }
+}

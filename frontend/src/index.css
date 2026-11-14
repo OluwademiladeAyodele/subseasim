@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Industrial dark engineering theme. State colours are centralised here and
+   in src/lib/stateColors.ts so the schematic, tables and legend agree. */
+@theme {
+  --color-bg: #070b10;
+  --color-panel: #0d141c;
+  --color-panel-2: #121b26;
+  --color-panel-3: #182331;
+  --color-line: #223142;
+  --color-line-strong: #2f4357;
+  --color-fg: #d6dee8;
+  --color-muted: #7d8da1;
+  --color-dim: #56667a;
+  --color-accent: #38bdf8;
+  --color-ok: #22c55e;
+  --color-bad: #ef4444;
+  --color-warn: #f59e0b;
+  --color-fault: #d946ef;
+  --color-info: #60a5fa;
+  --color-flow: #22d3ee;
+  --color-static: #5b6b80;
+  --color-trapped: #a78bfa;
+
+  --font-sans: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* thin industrial scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.moving-blink {
+  animation: blink 1s steps(2, start) infinite;
+}

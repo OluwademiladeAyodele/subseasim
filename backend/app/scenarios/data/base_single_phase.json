@@ -1,0 +1,437 @@
+{
+  "id": "base_single_phase",
+  "name": "Base case - single-phase oil producer (illustrative)",
+  "description": "Single subsea oil producer in 1200 m water depth with a vertical tree (PMV, PWV, production choke), SCSSV in the tubing, and a 5 km insulated flowline to a manifold / riser base held at constant pressure. All data are ILLUSTRATIVE training values and do not represent any real field, well or equipment.",
+  "data_classification": "ILLUSTRATIVE - not field data",
+  "fluid": {
+    "model": "constant_property_liquid",
+    "name": "Illustrative undersaturated light crude (constant properties)",
+    "density_kg_m3": 850,
+    "viscosity_cp": 5.0,
+    "specific_heat_j_kgk": 2000,
+    "thermal_expansion_1_k": 0.0007,
+    "bubble_point_pressure_bara": 40
+  },
+  "reservoir": {
+    "pressure_bara": 380,
+    "temperature_c": 95,
+    "productivity_index_m3d_per_bar": 20
+  },
+  "boundary": {
+    "node": "N_ARR",
+    "pressure_bara": 60,
+    "fluid_temperature_c": 4
+  },
+  "reservoir_node": "RES",
+  "nodes": [
+    {
+      "id": "RES",
+      "name": "Reservoir (static, at datum)",
+      "elevation_m": -3700
+    },
+    {
+      "id": "N_BH",
+      "name": "Bottomhole / sandface",
+      "elevation_m": -3700
+    },
+    {
+      "id": "N_SCSSV_U",
+      "name": "Tubing below SCSSV",
+      "elevation_m": -1800
+    },
+    {
+      "id": "N_SCSSV_D",
+      "name": "Tubing above SCSSV",
+      "elevation_m": -1800
+    },
+    {
+      "id": "N_TREE",
+      "name": "Tree production bore (below PMV)",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_PMV_PWV",
+      "name": "Tree bore between PMV and PWV",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_UC",
+      "name": "Upstream of production choke",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_DC",
+      "name": "Downstream of production choke",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_ARR",
+      "name": "Flowline arrival (manifold / riser base)",
+      "elevation_m": -1150
+    }
+  ],
+  "elements": [
+    {
+      "id": "IPR",
+      "type": "inflow",
+      "name": "Reservoir inflow (linear IPR)",
+      "from": "RES",
+      "to": "N_BH"
+    },
+    {
+      "id": "TBG-LOWER",
+      "type": "pipe",
+      "role": "tubing",
+      "name": "Production tubing (lower, below SCSSV)",
+      "from": "N_BH",
+      "to": "N_SCSSV_U",
+      "length_m": 1950,
+      "inner_diameter_m": 0.1005,
+      "roughness_m": 1.5e-05,
+      "overall_htc_w_m2k": 10,
+      "ambient_temperature_inlet_c": 95,
+      "ambient_temperature_outlet_c": 25.8,
+      "thermal_cells": 20
+    },
+    {
+      "id": "SCSSV",
+      "type": "valve",
+      "tag": "SCSSV-101",
+      "valve_type": "scssv",
+      "name": "Surface-controlled subsurface safety valve",
+      "from": "N_SCSSV_U",
+      "to": "N_SCSSV_D",
+      "bore_diameter_m": 0.1,
+      "loss_coefficient_open": 0.3,
+      "characteristic": "linear",
+      "supports_intermediate": false,
+      "full_stroke_time_s": 10,
+      "initial_position_pct": 100
+    },
+    {
+      "id": "TBG-UPPER",
+      "type": "pipe",
+      "role": "tubing",
+      "name": "Production tubing (upper, above SCSSV)",
+      "from": "N_SCSSV_D",
+      "to": "N_TREE",
+      "length_m": 610,
+      "inner_diameter_m": 0.1005,
+      "roughness_m": 1.5e-05,
+      "overall_htc_w_m2k": 10,
+      "ambient_temperature_inlet_c": 25.8,
+      "ambient_temperature_outlet_c": 4,
+      "thermal_cells": 10
+    },
+    {
+      "id": "PMV",
+      "type": "valve",
+      "tag": "PMV-101",
+      "valve_type": "master",
+      "name": "Production master valve",
+      "from": "N_TREE",
+      "to": "N_PMV_PWV",
+      "bore_diameter_m": 0.13,
+      "loss_coefficient_open": 0.1,
+      "characteristic": "linear",
+      "supports_intermediate": false,
+      "full_stroke_time_s": 30,
+      "initial_position_pct": 100
+    },
+    {
+      "id": "PWV",
+      "type": "valve",
+      "tag": "PWV-101",
+      "valve_type": "wing",
+      "name": "Production wing valve",
+      "from": "N_PMV_PWV",
+      "to": "N_UC",
+      "bore_diameter_m": 0.13,
+      "loss_coefficient_open": 0.1,
+      "characteristic": "linear",
+      "supports_intermediate": false,
+      "full_stroke_time_s": 30,
+      "initial_position_pct": 100
+    },
+    {
+      "id": "CHOKE",
+      "type": "choke",
+      "tag": "CHK-101",
+      "name": "Production choke",
+      "from": "N_UC",
+      "to": "N_DC",
+      "cv_max": 100,
+      "characteristic": "equal_percentage",
+      "rangeability": 30,
+      "supports_intermediate": true,
+      "full_stroke_time_s": 180,
+      "initial_position_pct": 30
+    },
+    {
+      "id": "FL-101",
+      "type": "pipe",
+      "role": "flowline",
+      "name": "Production flowline (insulated, 5 km)",
+      "from": "N_DC",
+      "to": "N_ARR",
+      "length_m": 5000,
+      "inner_diameter_m": 0.1524,
+      "roughness_m": 4.5e-05,
+      "overall_htc_w_m2k": 3,
+      "ambient_temperature_inlet_c": 4,
+      "ambient_temperature_outlet_c": 4,
+      "thermal_cells": 25
+    }
+  ],
+  "instruments": [
+    {
+      "tag": "PT-001",
+      "type": "pressure",
+      "description": "Downhole pressure gauge (PDG)",
+      "node": "N_BH",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-001",
+      "type": "temperature",
+      "description": "Downhole temperature gauge (PDG)",
+      "node": "N_BH",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-101",
+      "type": "pressure",
+      "description": "Tree production bore pressure (below PMV)",
+      "node": "N_TREE",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-101",
+      "type": "temperature",
+      "description": "Tree production bore temperature",
+      "node": "N_TREE",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-102",
+      "type": "pressure",
+      "description": "Pressure upstream of choke",
+      "node": "N_UC",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-102",
+      "type": "temperature",
+      "description": "Temperature upstream of choke",
+      "node": "N_UC",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-103",
+      "type": "pressure",
+      "description": "Pressure downstream of choke",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-103",
+      "type": "temperature",
+      "description": "Temperature downstream of choke",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PDT-101",
+      "type": "differential_pressure",
+      "description": "Choke differential pressure (PT-102 minus PT-103)",
+      "high_node": "N_UC",
+      "low_node": "N_DC",
+      "range_min": -50,
+      "range_max": 400
+    },
+    {
+      "tag": "FT-101",
+      "type": "flow",
+      "description": "Production flow meter (single-phase volumetric, line conditions)",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 3000
+    },
+    {
+      "tag": "PT-201",
+      "type": "pressure",
+      "description": "Flowline arrival pressure (boundary)",
+      "node": "N_ARR",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-201",
+      "type": "temperature",
+      "description": "Flowline arrival temperature",
+      "node": "N_ARR",
+      "range_min": 0,
+      "range_max": 150
+    }
+  ],
+  "training_rules": {
+    "max_opening_differential_bar": 35
+  },
+  "layout": {
+    "width": 1200,
+    "height": 520,
+    "nodes": {
+      "RES": {
+        "x": 220,
+        "y": 505
+      },
+      "N_BH": {
+        "x": 220,
+        "y": 470
+      },
+      "N_SCSSV_U": {
+        "x": 220,
+        "y": 395
+      },
+      "N_SCSSV_D": {
+        "x": 220,
+        "y": 355
+      },
+      "N_TREE": {
+        "x": 220,
+        "y": 228
+      },
+      "N_PMV_PWV": {
+        "x": 220,
+        "y": 145
+      },
+      "N_UC": {
+        "x": 470,
+        "y": 95
+      },
+      "N_DC": {
+        "x": 640,
+        "y": 95
+      },
+      "N_ARR": {
+        "x": 1060,
+        "y": 190
+      }
+    },
+    "waypoints": {
+      "PWV": [
+        {
+          "x": 220,
+          "y": 95
+        }
+      ],
+      "FL-101": [
+        {
+          "x": 730,
+          "y": 95
+        },
+        {
+          "x": 730,
+          "y": 285
+        },
+        {
+          "x": 1060,
+          "y": 285
+        }
+      ]
+    },
+    "instruments": {
+      "PT-001": {
+        "x": 310,
+        "y": 440
+      },
+      "TT-001": {
+        "x": 385,
+        "y": 440
+      },
+      "PT-101": {
+        "x": 115,
+        "y": 200
+      },
+      "TT-101": {
+        "x": 115,
+        "y": 252
+      },
+      "PT-102": {
+        "x": 410,
+        "y": 32
+      },
+      "TT-102": {
+        "x": 478,
+        "y": 32
+      },
+      "PT-103": {
+        "x": 620,
+        "y": 32
+      },
+      "TT-103": {
+        "x": 688,
+        "y": 32
+      },
+      "PDT-101": {
+        "x": 555,
+        "y": 158
+      },
+      "FT-101": {
+        "x": 805,
+        "y": 150
+      },
+      "PT-201": {
+        "x": 1140,
+        "y": 168
+      },
+      "TT-201": {
+        "x": 1140,
+        "y": 232
+      }
+    },
+    "annotations": [
+      {
+        "type": "rect",
+        "x": 150,
+        "y": 55,
+        "w": 560,
+        "h": 200,
+        "label": "SUBSEA PRODUCTION TREE (XT)",
+        "label_position": "bottom"
+      },
+      {
+        "type": "line",
+        "x1": 20,
+        "y1": 268,
+        "x2": 1180,
+        "y2": 268,
+        "x": 250,
+        "y": 262,
+        "label": "SEABED  -1200 m MSL"
+      },
+      {
+        "type": "rect",
+        "x": 1000,
+        "y": 168,
+        "w": 118,
+        "h": 44,
+        "label": "MANIFOLD"
+      },
+      {
+        "type": "text",
+        "x": 320,
+        "y": 512,
+        "text": "RESERVOIR  -3700 m TVDSS   (vertical scale compressed - schematic, not to scale)"
+      }
+    ]
+  }
+}
