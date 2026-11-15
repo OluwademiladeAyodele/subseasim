@@ -54,6 +54,28 @@ docker compose up --build
 
 One container serves the API, the WebSocket and the built frontend on port 8000.
 
+## Hosting on Railway
+
+The repository deploys to [Railway](https://railway.com) as-is. `railway.json` selects the
+Dockerfile build, sets the health check (`/api/health`) and pins **one replica**.
+
+1. Railway dashboard → **New Project** → **Deploy from GitHub repo** → choose this repository
+   (branch `main`). Railway detects `railway.json` and builds the Dockerfile.
+2. When the first deploy is healthy: service → **Settings** → **Networking** →
+   **Generate Domain**. Open the `https://….up.railway.app` URL.
+3. Optional variables (service → **Variables**): `SUBSEASIM_MAX_SESSIONS` (default 50),
+   `SUBSEASIM_ORPHAN_PAUSE_S` (default 30), `SUBSEASIM_DYNAMIC_STEP_S` (default 1.0).
+   `PORT` is set by Railway automatically. Do not set `SUBSEASIM_FRONTEND_DIST`.
+
+Every push to `main` redeploys. Things to know:
+
+* **Keep one replica.** Simulation sessions live in the server's memory, so a second
+  replica would split users between two servers.
+* **Redeploys reset running simulations.** Open browsers recover automatically and start a
+  fresh session, with a notice.
+* **CPU:** one session at 600× uses about half a CPU core. Size the plan for the number of
+  trainees who run at high speed at the same time.
+
 ## Local development
 
 Prerequisites: Python 3.11–3.13, Node 20.19+ / 22.12+.
