@@ -1,0 +1,12 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_e_injection_shutdown",
+  "name": "Dynamic E - Injection shutdown (illustrative)",
+  "description": "Methanol has been injecting long enough to reach steady concentration along the whole flowline. Close CIV-301: injection stops at the tree, but the methanol already in the flowline keeps moving to the manifold with the production flow. All data ILLUSTRATIVE.",
+  "element_overrides": {"CIV301": {"initial_position_pct": 100}},
+  "briefing": [
+    "Close CIV-301 and watch FT-301 drop to zero.",
+    "AT-510 falls quickly, AT-511 about an hour later, AT-512 later still - the methanol-free fluid front travels down the line.",
+    "Close PWV-101 as well: with no production flow the remaining methanol stops where it is."
+  ]
+}

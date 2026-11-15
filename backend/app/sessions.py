@@ -41,6 +41,8 @@ class Session:
     training: TrainingSession | None = None
     sockets: set[WebSocket] = field(default_factory=set)
     last_activity: float = field(default_factory=time.monotonic)
+    #: Last time at least one WebSocket client was attached.
+    last_watched: float = field(default_factory=time.monotonic)
     sent_event_id: int = 0
     sent_sample_seq: int = 0
 
@@ -107,7 +109,17 @@ class SessionManager:
     def create(self, scenario_id: str) -> Session:
         self._expire_idle()
         if len(self.sessions) >= self.settings.max_sessions:
-            raise SessionLimitReached("maximum number of concurrent sessions reached")
+            # Full: reclaim the least-recently-used session that nobody is
+            # watching (abandoned tabs, closed browsers). Refuse only when
+            # every session has a live browser attached.
+            idle = [s for s in self.sessions.values() if not s.sockets]
+            if not idle:
+                raise SessionLimitReached(
+                    f"the training server is at capacity ({self.settings.max_sessions} active sessions with a browser attached)"
+                )
+            oldest = min(idle, key=lambda s: s.last_activity)
+            del self.sessions[oldest.id]
+            log.info("session %s evicted (LRU, no browser attached) to admit a new session", oldest.id)
         sid = uuid.uuid4().hex
         s = Session(sid, SimulationEngine(get_scenario(scenario_id), self.settings))
         self.sessions[sid] = s
@@ -125,11 +137,31 @@ class SessionManager:
                 del self.sessions[sid]
 
     async def tick(self, elapsed_wall_s: float) -> None:
+        now = time.monotonic()
         for s in list(self.sessions.values()):
+            if s.sockets:
+                s.last_watched = now
+            elif s.engine.status == "running" and now - max(s.last_watched, s.last_activity) > self.settings.orphan_pause_s:
+                # no browser attached AND no API activity: nobody is using it
+                s.engine.pause()
+                s.engine.events.add(
+                    s.engine.time_s, "lifecycle",
+                    f"Simulation paused automatically: no browser connected for {self.settings.orphan_pause_s:.0f} s",
+                )
             if s.engine.status == "running":
+                t0 = s.engine.time_s
                 s.engine.advance(elapsed_wall_s * s.engine.time_scale)
+                if elapsed_wall_s > 0:
+                    inst = (s.engine.time_s - t0) / elapsed_wall_s
+                    prev = s.engine.achieved_speed
+                    # smoothed simulated-seconds per wall-second actually achieved
+                    s.engine.achieved_speed = inst if prev is None else 0.8 * prev + 0.2 * inst
                 s.update_training()
                 await s.broadcast()
+                # yield between sessions so API requests are never starved
+                await asyncio.sleep(0)
+            else:
+                s.engine.achieved_speed = None
 
     async def run(self) -> None:
         period = self.settings.tick_period_s

@@ -7,7 +7,7 @@ export function DiagnosticsPanel({ state }: { state: SimulationState }) {
   return (
     <div className="grid gap-3 p-3 lg:grid-cols-2" data-testid="diagnostics">
       <div>
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Solver</h3>
+        <h3 className="mb-1 t-eyebrow">Solver</h3>
         <dl className="grid grid-cols-[160px_1fr] gap-y-0.5">
           <dt className="text-muted">Hydraulic status</dt>
           <dd>
@@ -26,7 +26,7 @@ export function DiagnosticsPanel({ state }: { state: SimulationState }) {
             </>
           )}
         </dl>
-        <h3 className="mb-1 mt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Model validity checks</h3>
+        <h3 className="mb-1 mt-3 t-eyebrow">Model validity checks</h3>
         {state.diagnostics.length === 0 ? (
           <p className="text-ok">All Release 1 model assumptions satisfied at the current operating point.</p>
         ) : (
@@ -44,16 +44,16 @@ export function DiagnosticsPanel({ state }: { state: SimulationState }) {
         )}
       </div>
       <div>
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Active models (Release 1)</h3>
+        <h3 className="mb-1 t-eyebrow">Active models (Release 1)</h3>
         <dl className="space-y-1.5">
           {Object.entries(state.model).map(([k, v]) => (
             <div key={k}>
-              <dt className="text-[11px] font-bold uppercase text-muted">{k}</dt>
+              <dt className="text-[12.5px] font-bold uppercase text-muted">{k}</dt>
               <dd className="text-fg">{v}</dd>
             </div>
           ))}
         </dl>
-        <p className="mt-3 text-[11px] text-dim">
+        <p className="mt-3 text-[12.5px] text-dim">
           Not modelled: multiphase flow, gas, hydrates, wax, slugging, pressure transients / water hammer, reservoir depletion. See docs/ENGINEERING_ASSUMPTIONS.md.
           Scenario data: {state.scenario.data_classification}.
         </p>

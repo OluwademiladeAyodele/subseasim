@@ -32,6 +32,18 @@ Browser (React + TypeScript)                       Server (Python, FastAPI)
   internal server several interns never share a simulation. Idle sessions expire
   (default 4 h) and the session count is capped (default 50).
 
+## Dynamic subsystem (Release 2)
+
+`app/simulation/dynamic/` adds a time-dependent model next to the unchanged steady-state
+solver. It covers the network builder, the implicit hydraulic solver, transport and thermal,
+the coupling model and integrity tests. The engine selects the model per session
+(`mode`). In dynamic mode the series solver still runs as the steady-state reference.
+New endpoints: `POST /api/sessions/{id}/mode`, `POST /api/sessions/{id}/chemicals/{chem}`,
+`POST /api/sessions/{id}/integrity/tests`, `POST /api/sessions/{id}/integrity/tests/{n}/abort`.
+New frontend panels: `controls/ChemicalsPanel.tsx`, `controls/IntegrityPanel.tsx`. The schematic
+supports branches, check valves, chemical bands, zoom and pan. See
+[DYNAMIC_SIMULATION_MODEL.md](DYNAMIC_SIMULATION_MODEL.md).
+
 ## Backend layout
 
 | Path | Responsibility |
@@ -68,19 +80,38 @@ lifecycle transition, 422 validation failure, 503 session limit.
 
 ## Frontend layout (`frontend/src`)
 
+The UI is a **workstation** with separate workspaces rather than one crowded dashboard:
+a deep-navy sidebar (Operate · Monitor · Configure · Learn), a translucent top bar with the
+simulation controls, hash-routed pages (`#/overview`, `#/valves`, … deep-linkable, with
+back/forward), a non-modal **inspector** sheet that opens from the right for whatever
+component is selected, and a **command palette** (Ctrl/Cmd + K) for every workspace,
+valve operation, transmitter, simulation control and scenario. `Alt + 1–9` jumps between
+workspaces; `Esc` closes the inspector or palette.
+
 | Folder | Content |
 |---|---|
+| `app/` | Shell (layout, shortcuts), `Sidebar`, `TopBar`, `Inspector`, `CommandPalette`, `routes.ts`, `useRoute` (hash routing), `context.tsx` (live state, prefs, selection, actions) |
+| `pages/` | One file per workspace: Overview, Valves, Chemicals, Integrity, Trends (lazy-loaded), Instruments, Events, Diagnostics, Conditions, Scenario & model, Training |
 | `types/` | TypeScript interfaces mirroring the API |
 | `services/api.ts` | REST client |
 | `hooks/useSimulation.ts` | Session bootstrap, WebSocket with reconnect, state store |
-| `schematic/` | Config-driven SVG tree (`TreeSchematic.tsx`) |
-| `controls/` | Component control panel, conditions panel |
-| `instrumentation/` | Instrument and valve tables, key-measurement strip |
-| `charts/` | Trend charts |
+| `schematic/` | Config-driven SVG schematic (zoom/pan, chemical bands, live indicators) |
+| `controls/` | Component inspector content, chemicals, integrity and conditions panels |
+| `instrumentation/` | Instrument and valve tables, hero metrics |
+| `charts/` | Trend charts with event markers and steady-state reference |
 | `training/` | Training panel |
-| `dashboard/` | Layout, top bar, event log, diagnostics |
-| `components/ui/` | shadcn/ui-style primitives (Radix Tabs/Slider, CVA) |
-| `lib/` | Units, state colours, utils |
+| `dashboard/` | Event log, diagnostics panel |
+| `components/ui/` | Primitives: Button, Badge, Panel, Segmented, Stat, Tabs, Slider, Input, Kbd |
+| `lib/` | Units, state colours (status + schematic palette), utils |
+
+Design system (`index.css`): light surfaces (`#f4f6f9` canvas, white cards), slate text,
+deep navy structure with an electric-cyan highlight, status colours with text labels (never
+colour alone), Inter for text and JetBrains Mono (tabular) for every live number, a
+size-specific type scale (`t-display`, `t-title`, `t-heading`, `t-eyebrow`), press feedback on
+pointer-down, and short anchored transitions (page rise, inspector slide in and out along the same
+path, palette materialise). Everything respects `prefers-reduced-motion` and
+`prefers-reduced-transparency`. Fonts are self-hosted (`@fontsource-variable`), with no network
+font requests.
 
 ## Dependencies (and why)
 

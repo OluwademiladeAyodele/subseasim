@@ -1,0 +1,1377 @@
+{
+  "extends": "base_single_phase",
+  "id": "subsea_dynamic_base",
+  "name": "Dynamic subsea system - tree, annulus & chemical injection (illustrative)",
+  "description": "Base-case producer with the DYNAMIC model: compressible line-pack, wellbore storage and a radial reservoir transient; A-annulus with AMV/AWV/XOV; methanol, corrosion-inhibitor, biocide and wax-inhibitor injection circuits connected to the production path; tree cavity transmitter for valve integrity testing. All data are ILLUSTRATIVE training values.",
+  "nodes": [
+    {
+      "id": "RES",
+      "name": "Reservoir (drainage boundary, at datum)",
+      "elevation_m": -3700
+    },
+    {
+      "id": "N_BH",
+      "name": "Bottomhole / sandface",
+      "elevation_m": -3700
+    },
+    {
+      "id": "N_SCSSV_U",
+      "name": "Tubing below SCSSV",
+      "elevation_m": -1800
+    },
+    {
+      "id": "N_SCSSV_D",
+      "name": "Tubing above SCSSV (wax-inhibitor mandrel)",
+      "elevation_m": -1800
+    },
+    {
+      "id": "N_TREE",
+      "name": "Tree production bore (below PMV)",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_PMV_PWV",
+      "name": "Tree bore cavity between PMV and PWV",
+      "elevation_m": -1195,
+      "volume_m3": 0.03,
+      "heat_loss_ua_w_k": 15,
+      "thermal_mass_j_k": 8000000.0,
+      "ambient_temperature_c": 4
+    },
+    {
+      "id": "N_UC",
+      "name": "Wing block / upstream of production choke",
+      "elevation_m": -1195,
+      "volume_m3": 0.02,
+      "heat_loss_ua_w_k": 10,
+      "thermal_mass_j_k": 4000000.0,
+      "ambient_temperature_c": 4
+    },
+    {
+      "id": "N_DC",
+      "name": "Downstream of production choke (flowline inlet)",
+      "elevation_m": -1195
+    },
+    {
+      "id": "N_ARR",
+      "name": "Flowline arrival (manifold / riser base)",
+      "elevation_m": -1150
+    }
+  ],
+  "element_overrides": {
+    "TBG-LOWER": {
+      "wall_thickness_m": 0.0094,
+      "hydraulic_segments": 8
+    },
+    "TBG-UPPER": {
+      "wall_thickness_m": 0.0094,
+      "hydraulic_segments": 3
+    },
+    "FL-101": {
+      "wall_thickness_m": 0.0127,
+      "hydraulic_segments": 20
+    },
+    "SCSSV": {
+      "actuation_delay_s": 1,
+      "nominal_stroke_time_s": 11
+    },
+    "PMV": {
+      "actuation_delay_s": 2,
+      "nominal_stroke_time_s": 32
+    },
+    "PWV": {
+      "actuation_delay_s": 2,
+      "nominal_stroke_time_s": 32
+    },
+    "CHOKE": {
+      "actuation_delay_s": 1
+    }
+  },
+  "dynamics": {
+    "mode": "dynamic",
+    "segment_length_m": 250,
+    "transport_cells_per_segment": 5,
+    "reservoir": {
+      "net_thickness_m": 20,
+      "porosity": 0.2,
+      "total_compressibility_1_bar": 0.00015,
+      "wellbore_radius_m": 0.108,
+      "drainage_radius_m": 300,
+      "radial_cells": 14
+    },
+    "annulus_thermal": {
+      "elements": [
+        "ANN-A"
+      ],
+      "time_constant_s": 21600,
+      "tubing_weight": 0.6,
+      "tubing_elements": [
+        "TBG-LOWER",
+        "TBG-UPPER"
+      ],
+      "geothermal_mean_c": 50
+    },
+    "default_response": {
+      "pressure": {
+        "time_constant_s": 0.5,
+        "resolution": 0.01
+      },
+      "differential_pressure": {
+        "time_constant_s": 0.5,
+        "resolution": 0.01
+      },
+      "temperature": {
+        "time_constant_s": 15,
+        "resolution": 0.05
+      },
+      "flow": {
+        "time_constant_s": 2,
+        "resolution": 0.1
+      }
+    }
+  },
+  "subsystems": {
+    "fluids": {
+      "annulus": {
+        "name": "A-annulus completion brine (with gas-cushion compliance)",
+        "density_kg_m3": 1030,
+        "viscosity_cp": 1.0,
+        "specific_heat_j_kgk": 3800,
+        "thermal_expansion_1_k": 0.0003,
+        "compressibility_1_bar": 4.4e-05
+      },
+      "methanol": {
+        "name": "Methanol (MeOH)",
+        "density_kg_m3": 792,
+        "viscosity_cp": 0.59,
+        "specific_heat_j_kgk": 2500,
+        "thermal_expansion_1_k": 0.0012,
+        "compressibility_1_bar": 0.00012
+      },
+      "corrosion_inhibitor": {
+        "name": "Corrosion inhibitor (illustrative)",
+        "density_kg_m3": 950,
+        "viscosity_cp": 5.0,
+        "specific_heat_j_kgk": 2200,
+        "thermal_expansion_1_k": 0.0008,
+        "compressibility_1_bar": 6e-05
+      },
+      "biocide": {
+        "name": "Biocide (illustrative)",
+        "density_kg_m3": 1050,
+        "viscosity_cp": 2.0,
+        "specific_heat_j_kgk": 3500,
+        "thermal_expansion_1_k": 0.0005,
+        "compressibility_1_bar": 5e-05
+      },
+      "wax_inhibitor": {
+        "name": "Wax inhibitor (illustrative)",
+        "density_kg_m3": 880,
+        "viscosity_cp": 8.0,
+        "specific_heat_j_kgk": 2000,
+        "thermal_expansion_1_k": 0.0009,
+        "compressibility_1_bar": 7e-05
+      }
+    },
+    "nodes": [
+      {
+        "id": "ANN_BTM",
+        "name": "A-annulus at production packer",
+        "elevation_m": -3600,
+        "zone": "annulus",
+        "initial_pressure_bara": 323
+      },
+      {
+        "id": "ANN_TOP",
+        "name": "A-annulus at tubing hanger (below AMV)",
+        "elevation_m": -1195,
+        "zone": "annulus",
+        "initial_pressure_bara": 80
+      },
+      {
+        "id": "N_AMV_AWV",
+        "name": "Annulus bore between AMV and AWV",
+        "elevation_m": -1195,
+        "zone": "annulus",
+        "volume_m3": 0.01,
+        "initial_pressure_bara": 80
+      },
+      {
+        "id": "N_ANN_SVC",
+        "name": "Annulus service line at tree",
+        "elevation_m": -1195,
+        "zone": "annulus"
+      },
+      {
+        "id": "ANN_VENT",
+        "name": "Annulus service / bleed header (host)",
+        "elevation_m": -1150,
+        "zone": "annulus"
+      },
+      {
+        "id": "SUP_MEOH",
+        "name": "Methanol (hydrate inhibitor): subsea distribution unit (supply)",
+        "elevation_m": -1150,
+        "zone": "methanol"
+      },
+      {
+        "id": "N_MEOH_IN",
+        "name": "Methanol (hydrate inhibitor): injection line at tree",
+        "elevation_m": -1195,
+        "zone": "methanol"
+      },
+      {
+        "id": "N_MEOH_A",
+        "name": "Methanol (hydrate inhibitor): between isolation and metering valve",
+        "elevation_m": -1195,
+        "zone": "methanol"
+      },
+      {
+        "id": "N_MEOH_B",
+        "name": "Methanol (hydrate inhibitor): downstream of metering valve",
+        "elevation_m": -1195,
+        "zone": "methanol"
+      },
+      {
+        "id": "SUP_CI",
+        "name": "Corrosion inhibitor: subsea distribution unit (supply)",
+        "elevation_m": -1150,
+        "zone": "corrosion_inhibitor"
+      },
+      {
+        "id": "N_CI_IN",
+        "name": "Corrosion inhibitor: injection line at tree",
+        "elevation_m": -1195,
+        "zone": "corrosion_inhibitor"
+      },
+      {
+        "id": "N_CI_A",
+        "name": "Corrosion inhibitor: between isolation and metering valve",
+        "elevation_m": -1195,
+        "zone": "corrosion_inhibitor"
+      },
+      {
+        "id": "N_CI_B",
+        "name": "Corrosion inhibitor: downstream of metering valve",
+        "elevation_m": -1195,
+        "zone": "corrosion_inhibitor"
+      },
+      {
+        "id": "SUP_BIO",
+        "name": "Biocide: subsea distribution unit (supply)",
+        "elevation_m": -1150,
+        "zone": "biocide"
+      },
+      {
+        "id": "N_BIO_IN",
+        "name": "Biocide: injection line at tree",
+        "elevation_m": -1195,
+        "zone": "biocide"
+      },
+      {
+        "id": "N_BIO_A",
+        "name": "Biocide: between isolation and metering valve",
+        "elevation_m": -1195,
+        "zone": "biocide"
+      },
+      {
+        "id": "N_BIO_B",
+        "name": "Biocide: downstream of metering valve",
+        "elevation_m": -1195,
+        "zone": "biocide"
+      },
+      {
+        "id": "SUP_WAX",
+        "name": "Wax inhibitor: subsea distribution unit (supply)",
+        "elevation_m": -1150,
+        "zone": "wax_inhibitor"
+      },
+      {
+        "id": "N_WAX_IN",
+        "name": "Wax inhibitor: injection line at tree",
+        "elevation_m": -1195,
+        "zone": "wax_inhibitor"
+      },
+      {
+        "id": "N_WAX_A",
+        "name": "Wax inhibitor: between isolation and metering valve",
+        "elevation_m": -1195,
+        "zone": "wax_inhibitor"
+      },
+      {
+        "id": "N_WAX_B",
+        "name": "Wax inhibitor: downstream of metering valve",
+        "elevation_m": -1195,
+        "zone": "wax_inhibitor"
+      },
+      {
+        "id": "N_WAX_DH",
+        "name": "Wax inhibitor: downhole injection mandrel",
+        "elevation_m": -1800,
+        "zone": "wax_inhibitor"
+      }
+    ],
+    "elements": [
+      {
+        "id": "ANN-A",
+        "type": "pipe",
+        "role": "annulus",
+        "name": "A-annulus (tubing x 9-5/8 in casing)",
+        "from": "ANN_BTM",
+        "to": "ANN_TOP",
+        "length_m": 2405,
+        "inner_diameter_m": 0.106,
+        "flow_area_m2": 0.0278,
+        "roughness_m": 4.5e-05,
+        "wall_compliance_1_bar": 0.0001,
+        "hydraulic_segments": 4
+      },
+      {
+        "id": "AMV",
+        "type": "valve",
+        "tag": "AMV-101",
+        "valve_type": "annulus_master",
+        "name": "Annulus master valve",
+        "from": "ANN_TOP",
+        "to": "N_AMV_AWV",
+        "bore_diameter_m": 0.05,
+        "loss_coefficient_open": 0.5,
+        "full_stroke_time_s": 20,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 22,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "AWV",
+        "type": "valve",
+        "tag": "AWV-101",
+        "valve_type": "annulus_wing",
+        "name": "Annulus wing valve",
+        "from": "N_AMV_AWV",
+        "to": "N_ANN_SVC",
+        "bore_diameter_m": 0.05,
+        "loss_coefficient_open": 0.5,
+        "full_stroke_time_s": 20,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 22,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "XOV",
+        "type": "valve",
+        "tag": "XOV-101",
+        "valve_type": "crossover",
+        "name": "Crossover valve (annulus to production bore)",
+        "from": "N_AMV_AWV",
+        "to": "N_PMV_PWV",
+        "bore_diameter_m": 0.05,
+        "loss_coefficient_open": 0.5,
+        "full_stroke_time_s": 20,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 22,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "ANN-SVC",
+        "type": "pipe",
+        "role": "service_line",
+        "name": "Annulus service line (2 in, 5 km)",
+        "from": "N_ANN_SVC",
+        "to": "ANN_VENT",
+        "length_m": 5000,
+        "inner_diameter_m": 0.0508,
+        "hydraulic_segments": 5
+      },
+      {
+        "id": "CL-301",
+        "type": "pipe",
+        "role": "injection_line",
+        "name": "Methanol (hydrate inhibitor) umbilical line (25.4 mm, 5 km)",
+        "from": "SUP_MEOH",
+        "to": "N_MEOH_IN",
+        "length_m": 5000,
+        "inner_diameter_m": 0.0254,
+        "roughness_m": 1.5e-06,
+        "hydraulic_segments": 5
+      },
+      {
+        "id": "CIV301",
+        "type": "valve",
+        "tag": "CIV-301",
+        "valve_type": "injection_isolation",
+        "name": "Methanol (hydrate inhibitor) injection isolation valve",
+        "from": "N_MEOH_IN",
+        "to": "N_MEOH_A",
+        "bore_diameter_m": 0.01,
+        "loss_coefficient_open": 2.0,
+        "full_stroke_time_s": 10,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 12,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "CIMV301",
+        "type": "choke",
+        "tag": "CIMV-301",
+        "service": "metering",
+        "name": "Methanol (hydrate inhibitor) injection metering valve",
+        "from": "N_MEOH_A",
+        "to": "N_MEOH_B",
+        "cv_max": 0.25,
+        "characteristic": "linear",
+        "rangeability": 50,
+        "full_stroke_time_s": 60,
+        "initial_position_pct": 50
+      },
+      {
+        "id": "NRV301",
+        "type": "check_valve",
+        "tag": "NRV-301",
+        "name": "Methanol (hydrate inhibitor) non-return valve",
+        "from": "N_MEOH_B",
+        "to": "N_PMV_PWV",
+        "cracking_pressure_bar": 0.5,
+        "cv": 0.2
+      },
+      {
+        "id": "CL-302",
+        "type": "pipe",
+        "role": "injection_line",
+        "name": "Corrosion inhibitor umbilical line (9.5 mm, 5 km)",
+        "from": "SUP_CI",
+        "to": "N_CI_IN",
+        "length_m": 5000,
+        "inner_diameter_m": 0.0095,
+        "roughness_m": 1.5e-06,
+        "hydraulic_segments": 5
+      },
+      {
+        "id": "CIV302",
+        "type": "valve",
+        "tag": "CIV-302",
+        "valve_type": "injection_isolation",
+        "name": "Corrosion inhibitor injection isolation valve",
+        "from": "N_CI_IN",
+        "to": "N_CI_A",
+        "bore_diameter_m": 0.01,
+        "loss_coefficient_open": 2.0,
+        "full_stroke_time_s": 10,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 12,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "CIMV302",
+        "type": "choke",
+        "tag": "CIMV-302",
+        "service": "metering",
+        "name": "Corrosion inhibitor injection metering valve",
+        "from": "N_CI_A",
+        "to": "N_CI_B",
+        "cv_max": 0.0005,
+        "characteristic": "linear",
+        "rangeability": 50,
+        "full_stroke_time_s": 60,
+        "initial_position_pct": 50
+      },
+      {
+        "id": "NRV302",
+        "type": "check_valve",
+        "tag": "NRV-302",
+        "name": "Corrosion inhibitor non-return valve",
+        "from": "N_CI_B",
+        "to": "N_UC",
+        "cracking_pressure_bar": 0.5,
+        "cv": 0.05
+      },
+      {
+        "id": "CL-303",
+        "type": "pipe",
+        "role": "injection_line",
+        "name": "Biocide umbilical line (9.5 mm, 5 km)",
+        "from": "SUP_BIO",
+        "to": "N_BIO_IN",
+        "length_m": 5000,
+        "inner_diameter_m": 0.0095,
+        "roughness_m": 1.5e-06,
+        "hydraulic_segments": 5
+      },
+      {
+        "id": "CIV303",
+        "type": "valve",
+        "tag": "CIV-303",
+        "valve_type": "injection_isolation",
+        "name": "Biocide injection isolation valve",
+        "from": "N_BIO_IN",
+        "to": "N_BIO_A",
+        "bore_diameter_m": 0.01,
+        "loss_coefficient_open": 2.0,
+        "full_stroke_time_s": 10,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 12,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "CIMV303",
+        "type": "choke",
+        "tag": "CIMV-303",
+        "service": "metering",
+        "name": "Biocide injection metering valve",
+        "from": "N_BIO_A",
+        "to": "N_BIO_B",
+        "cv_max": 0.0021,
+        "characteristic": "linear",
+        "rangeability": 50,
+        "full_stroke_time_s": 60,
+        "initial_position_pct": 50
+      },
+      {
+        "id": "NRV303",
+        "type": "check_valve",
+        "tag": "NRV-303",
+        "name": "Biocide non-return valve",
+        "from": "N_BIO_B",
+        "to": "N_DC",
+        "cracking_pressure_bar": 0.5,
+        "cv": 0.05
+      },
+      {
+        "id": "CL-304",
+        "type": "pipe",
+        "role": "injection_line",
+        "name": "Wax inhibitor umbilical line (9.5 mm, 5 km)",
+        "from": "SUP_WAX",
+        "to": "N_WAX_IN",
+        "length_m": 5000,
+        "inner_diameter_m": 0.0095,
+        "roughness_m": 1.5e-06,
+        "hydraulic_segments": 5
+      },
+      {
+        "id": "CIV304",
+        "type": "valve",
+        "tag": "CIV-304",
+        "valve_type": "injection_isolation",
+        "name": "Wax inhibitor injection isolation valve",
+        "from": "N_WAX_IN",
+        "to": "N_WAX_A",
+        "bore_diameter_m": 0.01,
+        "loss_coefficient_open": 2.0,
+        "full_stroke_time_s": 10,
+        "actuation_delay_s": 2,
+        "nominal_stroke_time_s": 12,
+        "initial_position_pct": 0
+      },
+      {
+        "id": "CIMV304",
+        "type": "choke",
+        "tag": "CIMV-304",
+        "service": "metering",
+        "name": "Wax inhibitor injection metering valve",
+        "from": "N_WAX_A",
+        "to": "N_WAX_B",
+        "cv_max": 0.002,
+        "characteristic": "linear",
+        "rangeability": 50,
+        "full_stroke_time_s": 60,
+        "initial_position_pct": 50
+      },
+      {
+        "id": "CL-304DH",
+        "type": "pipe",
+        "role": "injection_line",
+        "name": "Wax inhibitor downhole line (6.4 mm, 605 m)",
+        "from": "N_WAX_B",
+        "to": "N_WAX_DH",
+        "length_m": 605,
+        "inner_diameter_m": 0.0064,
+        "roughness_m": 1.5e-06,
+        "hydraulic_segments": 2
+      },
+      {
+        "id": "NRV304",
+        "type": "check_valve",
+        "tag": "NRV-304",
+        "name": "Wax inhibitor non-return valve (downhole)",
+        "from": "N_WAX_DH",
+        "to": "N_SCSSV_D",
+        "cracking_pressure_bar": 2.0,
+        "cv": 0.05
+      }
+    ],
+    "boundaries": [
+      {
+        "node": "ANN_VENT",
+        "pressure_bara": 15,
+        "description": "Annulus bleed header at host (held pressure)"
+      },
+      {
+        "node": "SUP_MEOH",
+        "pressure_bara": 250,
+        "description": "Methanol (hydrate inhibitor) pump discharge referred to the SDU"
+      },
+      {
+        "node": "SUP_CI",
+        "pressure_bara": 200,
+        "description": "Corrosion inhibitor pump discharge referred to the SDU"
+      },
+      {
+        "node": "SUP_BIO",
+        "pressure_bara": 150,
+        "description": "Biocide pump discharge referred to the SDU"
+      },
+      {
+        "node": "SUP_WAX",
+        "pressure_bara": 300,
+        "description": "Wax inhibitor pump discharge referred to the SDU"
+      }
+    ],
+    "instruments": [
+      {
+        "tag": "PT-104",
+        "type": "pressure",
+        "description": "Tree cavity pressure (between PMV and PWV)",
+        "node": "N_PMV_PWV",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "PT-202",
+        "type": "pressure",
+        "description": "Flowline mid-point pressure (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "TT-202",
+        "type": "temperature",
+        "description": "Flowline mid-point temperature (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 150
+      },
+      {
+        "tag": "PT-401",
+        "type": "pressure",
+        "description": "A-annulus pressure at tree (below AMV)",
+        "node": "ANN_TOP",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "TT-401",
+        "type": "temperature",
+        "description": "A-annulus fluid temperature at tree",
+        "node": "ANN_TOP",
+        "range_min": 0,
+        "range_max": 150
+      },
+      {
+        "tag": "PT-402",
+        "type": "pressure",
+        "description": "Annulus bore pressure between AMV and AWV",
+        "node": "N_AMV_AWV",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "PT-301",
+        "type": "pressure",
+        "description": "Methanol (hydrate inhibitor) injection pressure at tree",
+        "node": "N_MEOH_IN",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "FT-301",
+        "type": "flow",
+        "description": "Methanol (hydrate inhibitor) injection flow (metering valve)",
+        "element": "CIMV301",
+        "range_min": 0,
+        "range_max": 120
+      },
+      {
+        "tag": "PT-302",
+        "type": "pressure",
+        "description": "Corrosion inhibitor injection pressure at tree",
+        "node": "N_CI_IN",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "FT-302",
+        "type": "flow",
+        "description": "Corrosion inhibitor injection flow (metering valve)",
+        "element": "CIMV302",
+        "range_min": 0,
+        "range_max": 2
+      },
+      {
+        "tag": "PT-303",
+        "type": "pressure",
+        "description": "Biocide injection pressure at tree",
+        "node": "N_BIO_IN",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "FT-303",
+        "type": "flow",
+        "description": "Biocide injection flow (metering valve)",
+        "element": "CIMV303",
+        "range_min": 0,
+        "range_max": 2
+      },
+      {
+        "tag": "PT-304",
+        "type": "pressure",
+        "description": "Wax inhibitor injection pressure at tree",
+        "node": "N_WAX_IN",
+        "range_min": 0,
+        "range_max": 690
+      },
+      {
+        "tag": "FT-304",
+        "type": "flow",
+        "description": "Wax inhibitor injection flow (metering valve)",
+        "element": "CIMV304",
+        "range_min": 0,
+        "range_max": 2
+      },
+      {
+        "tag": "AT-510",
+        "type": "concentration",
+        "chemical": "methanol",
+        "unit": "vol%",
+        "description": "Methanol concentration downstream of choke",
+        "node": "N_DC",
+        "range_min": 0,
+        "range_max": 25,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.01
+        }
+      },
+      {
+        "tag": "AT-511",
+        "type": "concentration",
+        "chemical": "methanol",
+        "unit": "vol%",
+        "description": "Methanol (hydrate inhibitor) concentration, flowline mid-point (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 25,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.01
+        }
+      },
+      {
+        "tag": "AT-512",
+        "type": "concentration",
+        "chemical": "methanol",
+        "unit": "vol%",
+        "description": "Methanol (hydrate inhibitor) concentration at flowline arrival",
+        "node": "N_ARR",
+        "range_min": 0,
+        "range_max": 25,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.01
+        }
+      },
+      {
+        "tag": "AT-521",
+        "type": "concentration",
+        "chemical": "corrosion_inhibitor",
+        "unit": "ppm",
+        "description": "Corrosion inhibitor concentration, flowline mid-point (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      },
+      {
+        "tag": "AT-522",
+        "type": "concentration",
+        "chemical": "corrosion_inhibitor",
+        "unit": "ppm",
+        "description": "Corrosion inhibitor concentration at flowline arrival",
+        "node": "N_ARR",
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      },
+      {
+        "tag": "AT-531",
+        "type": "concentration",
+        "chemical": "biocide",
+        "unit": "ppm",
+        "description": "Biocide concentration, flowline mid-point (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      },
+      {
+        "tag": "AT-532",
+        "type": "concentration",
+        "chemical": "biocide",
+        "unit": "ppm",
+        "description": "Biocide concentration at flowline arrival",
+        "node": "N_ARR",
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      },
+      {
+        "tag": "AT-541",
+        "type": "concentration",
+        "chemical": "wax_inhibitor",
+        "unit": "ppm",
+        "description": "Wax inhibitor concentration, flowline mid-point (2.5 km)",
+        "element": "FL-101",
+        "distance_m": 2500,
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      },
+      {
+        "tag": "AT-542",
+        "type": "concentration",
+        "chemical": "wax_inhibitor",
+        "unit": "ppm",
+        "description": "Wax inhibitor concentration at flowline arrival",
+        "node": "N_ARR",
+        "range_min": 0,
+        "range_max": 1000,
+        "response": {
+          "time_constant_s": 20,
+          "update_interval_s": 30,
+          "resolution": 0.1
+        }
+      }
+    ]
+  },
+  "chemicals": [
+    {
+      "id": "methanol",
+      "name": "Methanol (hydrate inhibitor)",
+      "fluid": "methanol",
+      "supply_node": "SUP_MEOH",
+      "injection_node": "N_PMV_PWV",
+      "isolation_valve": "CIV-301",
+      "control_valve": "CIMV-301",
+      "check_valve": "NRV-301",
+      "pressure_transmitter": "PT-301",
+      "flow_transmitter": "FT-301",
+      "pump": {
+        "discharge_pressure_bara": 250,
+        "static_pressure_bara": 30,
+        "running": true
+      },
+      "injection_temperature_c": 4,
+      "display_unit": "vol%",
+      "target_min": 2,
+      "target_max": 10,
+      "color": "#facc15"
+    },
+    {
+      "id": "corrosion_inhibitor",
+      "name": "Corrosion inhibitor",
+      "fluid": "corrosion_inhibitor",
+      "supply_node": "SUP_CI",
+      "injection_node": "N_UC",
+      "isolation_valve": "CIV-302",
+      "control_valve": "CIMV-302",
+      "check_valve": "NRV-302",
+      "pressure_transmitter": "PT-302",
+      "flow_transmitter": "FT-302",
+      "pump": {
+        "discharge_pressure_bara": 200,
+        "static_pressure_bara": 35,
+        "running": true
+      },
+      "injection_temperature_c": 4,
+      "display_unit": "ppm",
+      "target_min": 20,
+      "target_max": 80,
+      "color": "#84cc16"
+    },
+    {
+      "id": "biocide",
+      "name": "Biocide",
+      "fluid": "biocide",
+      "supply_node": "SUP_BIO",
+      "injection_node": "N_DC",
+      "isolation_valve": "CIV-303",
+      "control_valve": "CIMV-303",
+      "check_valve": "NRV-303",
+      "pressure_transmitter": "PT-303",
+      "flow_transmitter": "FT-303",
+      "pump": {
+        "discharge_pressure_bara": 150,
+        "static_pressure_bara": 35,
+        "running": true
+      },
+      "injection_temperature_c": 4,
+      "display_unit": "ppm",
+      "target_min": 100,
+      "target_max": 300,
+      "color": "#ec4899"
+    },
+    {
+      "id": "wax_inhibitor",
+      "name": "Wax inhibitor",
+      "fluid": "wax_inhibitor",
+      "supply_node": "SUP_WAX",
+      "injection_node": "N_SCSSV_D",
+      "isolation_valve": "CIV-304",
+      "control_valve": "CIMV-304",
+      "check_valve": "NRV-304",
+      "pressure_transmitter": "PT-304",
+      "flow_transmitter": "FT-304",
+      "pump": {
+        "discharge_pressure_bara": 300,
+        "static_pressure_bara": 30,
+        "running": true
+      },
+      "injection_temperature_c": 4,
+      "display_unit": "ppm",
+      "target_min": 150,
+      "target_max": 500,
+      "color": "#f97316"
+    }
+  ],
+  "integrity_tests": [
+    {
+      "id": "pmv_inflow",
+      "name": "PMV inflow (leak-off) test - tree cavity",
+      "type": "inflow",
+      "test_node": "N_PMV_PWV",
+      "pressure_transmitter": "PT-104",
+      "stabilisation_s": 300,
+      "duration_s": 900,
+      "max_change_bar": 3,
+      "description": "Close PMV, bleed the cavity to flowline pressure through PWV, close PWV, then monitor PT-104 for build-up from tubing pressure across the closed PMV."
+    },
+    {
+      "id": "cavity_hold",
+      "name": "Tree cavity pressure-hold test (MeOH pressurised)",
+      "type": "pressure_hold",
+      "test_node": "N_PMV_PWV",
+      "pressure_transmitter": "PT-104",
+      "stabilisation_s": 600,
+      "duration_s": 900,
+      "max_change_bar": 5,
+      "description": "With PMV and PWV closed, pressurise the cavity with methanol (open CIV-301), close CIV-301, then monitor PT-104 for decay across PMV/PWV seats."
+    },
+    {
+      "id": "amv_inflow",
+      "name": "AMV inflow test - annulus cavity",
+      "type": "inflow",
+      "test_node": "N_AMV_AWV",
+      "pressure_transmitter": "PT-402",
+      "stabilisation_s": 120,
+      "duration_s": 600,
+      "max_change_bar": 3,
+      "description": "Close AMV, bleed the AMV-AWV cavity through AWV, close AWV and monitor PT-402."
+    },
+    {
+      "id": "pwv_stroke",
+      "name": "PWV stroke test",
+      "type": "stroke",
+      "valve": "PWV-101",
+      "stroke_tolerance_pct": 15
+    },
+    {
+      "id": "pmv_stroke",
+      "name": "PMV stroke test",
+      "type": "stroke",
+      "valve": "PMV-101",
+      "stroke_tolerance_pct": 15
+    }
+  ],
+  "briefing": [
+    "Dynamic model: every reading evolves over simulated time from mass, momentum and energy balances.",
+    "Try closing PWV-101: the valve finishes moving in ~32 s, but tree and downhole pressures keep building for hours (wellbore storage + reservoir transient).",
+    "Open CIV-301 to inject methanol into the tree bore and follow the concentration front to AT-510, AT-511 and AT-512."
+  ],
+  "layout": {
+    "width": 1400,
+    "height": 665,
+    "nodes": {
+      "RES": {
+        "x": 470,
+        "y": 645
+      },
+      "N_BH": {
+        "x": 470,
+        "y": 612
+      },
+      "N_SCSSV_U": {
+        "x": 470,
+        "y": 530
+      },
+      "N_SCSSV_D": {
+        "x": 470,
+        "y": 485
+      },
+      "N_TREE": {
+        "x": 470,
+        "y": 375
+      },
+      "N_PMV_PWV": {
+        "x": 470,
+        "y": 285
+      },
+      "N_UC": {
+        "x": 650,
+        "y": 215
+      },
+      "N_DC": {
+        "x": 810,
+        "y": 215
+      },
+      "N_ARR": {
+        "x": 1275,
+        "y": 330
+      },
+      "ANN_BTM": {
+        "x": 390,
+        "y": 595
+      },
+      "ANN_TOP": {
+        "x": 390,
+        "y": 370
+      },
+      "N_AMV_AWV": {
+        "x": 390,
+        "y": 300
+      },
+      "N_ANN_SVC": {
+        "x": 300,
+        "y": 300
+      },
+      "ANN_VENT": {
+        "x": 50,
+        "y": 300
+      },
+      "SUP_WAX": {
+        "x": 1360,
+        "y": 30
+      },
+      "N_WAX_IN": {
+        "x": 250,
+        "y": 30
+      },
+      "N_WAX_A": {
+        "x": 250,
+        "y": 75
+      },
+      "N_WAX_B": {
+        "x": 250,
+        "y": 120
+      },
+      "N_WAX_DH": {
+        "x": 250,
+        "y": 485
+      },
+      "SUP_MEOH": {
+        "x": 1360,
+        "y": 55
+      },
+      "N_MEOH_IN": {
+        "x": 560,
+        "y": 55
+      },
+      "N_MEOH_A": {
+        "x": 560,
+        "y": 100
+      },
+      "N_MEOH_B": {
+        "x": 560,
+        "y": 145
+      },
+      "SUP_CI": {
+        "x": 1360,
+        "y": 80
+      },
+      "N_CI_IN": {
+        "x": 650,
+        "y": 80
+      },
+      "N_CI_A": {
+        "x": 650,
+        "y": 125
+      },
+      "N_CI_B": {
+        "x": 650,
+        "y": 170
+      },
+      "SUP_BIO": {
+        "x": 1360,
+        "y": 105
+      },
+      "N_BIO_IN": {
+        "x": 810,
+        "y": 105
+      },
+      "N_BIO_A": {
+        "x": 810,
+        "y": 140
+      },
+      "N_BIO_B": {
+        "x": 810,
+        "y": 175
+      }
+    },
+    "waypoints": {
+      "PWV": [
+        {
+          "x": 470,
+          "y": 215
+        }
+      ],
+      "FL-101": [
+        {
+          "x": 880,
+          "y": 215
+        },
+        {
+          "x": 880,
+          "y": 440
+        },
+        {
+          "x": 1275,
+          "y": 440
+        }
+      ],
+      "NRV301": [
+        {
+          "x": 560,
+          "y": 285
+        }
+      ],
+      "NRV304": []
+    },
+    "instruments": {
+      "PT-001": {
+        "x": 560,
+        "y": 605
+      },
+      "TT-001": {
+        "x": 630,
+        "y": 605
+      },
+      "PT-101": {
+        "x": 545,
+        "y": 362
+      },
+      "TT-101": {
+        "x": 610,
+        "y": 362
+      },
+      "PT-104": {
+        "x": 432,
+        "y": 236
+      },
+      "PT-102": {
+        "x": 610,
+        "y": 262
+      },
+      "TT-102": {
+        "x": 675,
+        "y": 262
+      },
+      "PDT-101": {
+        "x": 712,
+        "y": 330
+      },
+      "PT-103": {
+        "x": 775,
+        "y": 270
+      },
+      "TT-103": {
+        "x": 840,
+        "y": 270
+      },
+      "FT-101": {
+        "x": 945,
+        "y": 300
+      },
+      "PT-202": {
+        "x": 1010,
+        "y": 480
+      },
+      "TT-202": {
+        "x": 1075,
+        "y": 480
+      },
+      "PT-201": {
+        "x": 1352,
+        "y": 225
+      },
+      "TT-201": {
+        "x": 1352,
+        "y": 380
+      },
+      "PT-401": {
+        "x": 330,
+        "y": 358
+      },
+      "TT-401": {
+        "x": 330,
+        "y": 425
+      },
+      "PT-402": {
+        "x": 330,
+        "y": 240
+      },
+      "PT-301": {
+        "x": 515,
+        "y": 75
+      },
+      "FT-301": {
+        "x": 515,
+        "y": 130
+      },
+      "PT-302": {
+        "x": 605,
+        "y": 95
+      },
+      "FT-302": {
+        "x": 605,
+        "y": 150
+      },
+      "PT-303": {
+        "x": 765,
+        "y": 118
+      },
+      "FT-303": {
+        "x": 765,
+        "y": 165
+      },
+      "PT-304": {
+        "x": 205,
+        "y": 52
+      },
+      "FT-304": {
+        "x": 205,
+        "y": 105
+      },
+      "AT-510": {
+        "x": 960,
+        "y": 190
+      },
+      "AT-511": {
+        "x": 1180,
+        "y": 470
+      },
+      "AT-521": {
+        "x": 1180,
+        "y": 470
+      },
+      "AT-531": {
+        "x": 1180,
+        "y": 470
+      },
+      "AT-541": {
+        "x": 1180,
+        "y": 470
+      },
+      "AT-512": {
+        "x": 1110,
+        "y": 300
+      },
+      "AT-522": {
+        "x": 1110,
+        "y": 300
+      },
+      "AT-532": {
+        "x": 1110,
+        "y": 300
+      },
+      "AT-542": {
+        "x": 1110,
+        "y": 300
+      }
+    },
+    "annotations": [
+      {
+        "type": "rect",
+        "x": 272,
+        "y": 150,
+        "w": 640,
+        "h": 245,
+        "label": "SUBSEA PRODUCTION TREE (XT)",
+        "label_position": "top"
+      },
+      {
+        "type": "line",
+        "x1": 20,
+        "y1": 400,
+        "x2": 1380,
+        "y2": 400,
+        "x": 940,
+        "y": 394,
+        "label": "SEABED  -1200 m MSL"
+      },
+      {
+        "type": "rect",
+        "x": 1205,
+        "y": 300,
+        "w": 140,
+        "h": 60,
+        "label": "MANIFOLD"
+      },
+      {
+        "type": "text",
+        "x": 1010,
+        "y": 20,
+        "text": "CHEMICAL SUPPLY  \u00b7  SDU / UMBILICAL  ->"
+      },
+      {
+        "type": "text",
+        "x": 30,
+        "y": 290,
+        "text": "<- ANNULUS SERVICE LINE (HOST)"
+      },
+      {
+        "type": "text",
+        "x": 600,
+        "y": 660,
+        "text": "RESERVOIR  -3700 m TVDSS   (vertical scale compressed - schematic, not to scale)"
+      }
+    ]
+  }
+}

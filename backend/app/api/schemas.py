@@ -51,6 +51,28 @@ class FluidUpdate(_Req):
     bubble_point_pressure_pa: Annotated[float, Field(ge=0, le=2.0e8)] | None = None
 
 
+class ModeRequest(_Req):
+    mode: Literal["steady", "dynamic"]
+
+
+class PumpRequest(_Req):
+    running: bool | None = None
+    # 1 .. 2000 bara
+    discharge_pressure_pa: Annotated[float, Field(gt=1.0e5, le=2.0e8)] | None = None
+
+
+class IntegrityTestRequest(_Req):
+    type: Literal["pressure_hold", "inflow", "stroke"]
+    name: str | None = None
+    test_node: str | None = None
+    transmitter: str | None = None
+    valve: str | None = None
+    stabilisation_s: Annotated[float, Field(ge=0, le=86_400)] = 300.0
+    duration_s: Annotated[float, Field(gt=0, le=86_400)] = 900.0
+    max_change_bar: Annotated[float, Field(gt=0, le=1000)] = 2.0
+    stroke_tolerance_pct: Annotated[float, Field(gt=0, le=200)] = 20.0
+
+
 class TrainingStartRequest(_Req):
     exercise_id: str
 

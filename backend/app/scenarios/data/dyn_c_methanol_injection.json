@@ -1,0 +1,12 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_c_methanol_injection",
+  "name": "Dynamic C - Methanol injection (illustrative)",
+  "description": "Methanol pump running at the SDU, CIV-301 closed, metering valve CIMV-301 at 60 %. Open CIV-301: the injection rate follows from the available differential; methanol enters the tree bore cavity and travels down the flowline with the production flow. All data ILLUSTRATIVE.",
+  "element_overrides": {"CIMV301": {"initial_position_pct": 60}},
+  "briefing": [
+    "Check the available differential for methanol in the Chemicals panel, then open CIV-301.",
+    "FT-301 responds within seconds; AT-510 (downstream choke) shortly after; AT-511 (2.5 km) and AT-512 (arrival) much later - their delays are V/Q of the flowline.",
+    "Note the small change in production pressures and the slight cooling at TT-103 from mixing cold methanol."
+  ]
+}

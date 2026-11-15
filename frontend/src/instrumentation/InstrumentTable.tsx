@@ -9,9 +9,10 @@ const STATUS_TONE: Record<InstrumentStatus, "ok" | "warn" | "fault"> = {
   OUT_OF_RANGE_LOW: "warn",
   UNDETERMINED: "fault",
   BAD: "fault",
+  NOT_MODELLED: "warn",
 };
 
-const th = "border-b border-line px-2 py-1 text-left text-[10px] font-bold uppercase tracking-[0.1em] text-dim";
+const th = "border-b border-line px-2 py-1 text-left t-eyebrow";
 const td = "border-b border-line/50 px-2 py-1";
 
 export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationState; prefs: DisplayPrefs; onSelect?: (tag: string) => void }) {
@@ -20,6 +21,7 @@ export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationS
     ["Pressure", ["pressure", "differential_pressure"]],
     ["Temperature", ["temperature"]],
     ["Flow", ["flow"]],
+    ["Chemical concentration", ["concentration"]],
   ];
   return (
     <table className="w-full border-collapse" data-testid="instrument-table">
@@ -43,15 +45,20 @@ export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationS
     if (!rows.length) return null;
     return [
       <tr key={`g-${label}`}>
-        <td colSpan={7} className="bg-panel-3/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+        <td colSpan={7} className="bg-panel-3/50 px-2 py-0.5 t-eyebrow">
           {label}
         </td>
       </tr>,
       ...rows.map((i) => {
-        const d = instrumentDisplay(i.type, i.value_si, prefs);
-        const lo = instrumentDisplay(i.type, i.range_min_si, prefs);
-        const hi = instrumentDisplay(i.type, i.range_max_si, prefs);
-        const loc = i.type === "differential_pressure" ? `${nodeName(i.high_node)} − ${nodeName(i.low_node)}` : nodeName(i.node);
+        const d = instrumentDisplay(i.type, i.value_si, prefs, i.display_unit);
+        const lo = instrumentDisplay(i.type, i.range_min_si, prefs, i.display_unit);
+        const hi = instrumentDisplay(i.type, i.range_max_si, prefs, i.display_unit);
+        const loc =
+          i.type === "differential_pressure"
+            ? `${nodeName(i.high_node)} − ${nodeName(i.low_node)}`
+            : i.element
+              ? `${i.element}${i.distance_m != null ? ` @ ${fmt(i.distance_m, 0)} m` : ""}`
+              : nodeName(i.node);
         return (
           <tr key={i.tag} className="cursor-pointer hover:bg-panel-3/60" onClick={() => onSelect?.(i.tag)} data-testid={`row-${i.tag}`}>
             <td className={`${td} num font-bold`}>{i.tag}</td>
@@ -100,7 +107,10 @@ export function ValveTable({ state, onSelect }: { state: SimulationState; onSele
               <td className={td}>
                 <Badge tone={{ open: "ok", closed: "bad", partial: "warn", moving: "warn", fault: "fault" }[vis] as "ok"}>{VALVE_LABEL[vis]}</Badge>
               </td>
-              <td className={`${td} text-muted`}>{v.moving ? `travelling (${fmt(v.time_to_target_s, 0)} s)` : "idle"}</td>
+              <td className={`${td} text-muted`}>
+                {v.moving ? `${v.phase === "delay" ? "dead time" : "travelling"} (${fmt(v.time_to_target_s, 0)} s)` : "idle"}
+                {v.leaking ? <span className="ml-1 text-fault">seat leak</span> : null}
+              </td>
               <td className={`${td} num text-right`}>{v.dp_pa === null ? "undet." : fmt(paToBarDelta(v.dp_pa), 2)}</td>
               <td className={`${td} text-dim`}>{v.supported_commands.join(", ") || "none (unavailable)"}</td>
             </tr>

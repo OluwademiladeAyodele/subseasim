@@ -1,4 +1,19 @@
-import type { ExerciseSummary, ScenarioInfo, SessionPayload, ValveCommand } from "@/types/simulation";
+import type { ExerciseSummary, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
+
+/** Scenario a brand-new session starts with (dynamic model, full system). */
+export const DEFAULT_SCENARIO = "subsea_dynamic_base";
+
+export interface IntegrityTestRequest {
+  type: "pressure_hold" | "inflow" | "stroke";
+  name?: string;
+  test_node?: string | null;
+  transmitter?: string | null;
+  valve?: string | null;
+  stabilisation_s?: number;
+  duration_s?: number;
+  max_change_bar?: number;
+  stroke_tolerance_pct?: number;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -40,11 +55,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   scenarios: () => request<ScenarioInfo[]>("GET", "/api/scenarios"),
   exercises: () => request<ExerciseSummary[]>("GET", "/api/training/exercises"),
-  createSession: (scenario_id = "base_single_phase") => request<SessionPayload>("POST", "/api/sessions", { scenario_id }),
+  createSession: (scenario_id = DEFAULT_SCENARIO) => request<SessionPayload>("POST", "/api/sessions", { scenario_id }),
   getSession: (sid: string) => request<SessionPayload>("GET", `/api/sessions/${sid}`),
   lifecycle: (sid: string, action: "start" | "pause" | "resume" | "reset") =>
     request<SessionPayload>("POST", `/api/sessions/${sid}/lifecycle`, { action }),
   speed: (sid: string, time_scale: number) => request<SessionPayload>("POST", `/api/sessions/${sid}/speed`, { time_scale }),
+  mode: (sid: string, mode: SimMode) => request<SessionPayload>("POST", `/api/sessions/${sid}/mode`, { mode }),
   loadScenario: (sid: string, scenario_id: string) =>
     request<SessionPayload>("POST", `/api/sessions/${sid}/scenario`, { scenario_id }),
   valve: (sid: string, tag: string, command: ValveCommand, position_pct?: number) =>
@@ -52,6 +68,10 @@ export const api = {
       command,
       ...(position_pct !== undefined ? { position_pct } : {}),
     }),
+  pump: (sid: string, chem: string, body: { running?: boolean; discharge_pressure_pa?: number }) =>
+    request<SessionPayload>("POST", `/api/sessions/${sid}/chemicals/${encodeURIComponent(chem)}`, body),
+  integrityStart: (sid: string, body: IntegrityTestRequest) => request<SessionPayload>("POST", `/api/sessions/${sid}/integrity/tests`, body),
+  integrityAbort: (sid: string, id: number) => request<SessionPayload>("POST", `/api/sessions/${sid}/integrity/tests/${id}/abort`),
   boundary: (sid: string, body: Record<string, number>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/boundary`, body),
   fluid: (sid: string, body: Record<string, number>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/fluid`, body),
   trainingStart: (sid: string, exercise_id: string) =>

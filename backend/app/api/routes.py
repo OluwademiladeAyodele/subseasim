@@ -8,7 +8,10 @@ from app.api.schemas import (
     BoundaryUpdate,
     CreateSessionRequest,
     FluidUpdate,
+    IntegrityTestRequest,
     LifecycleRequest,
+    ModeRequest,
+    PumpRequest,
     LoadScenarioRequest,
     SpeedRequest,
     TrainingAnswerRequest,
@@ -109,6 +112,60 @@ async def speed(sid: str, req: SpeedRequest) -> dict:
     return await _after_change(s)
 
 
+@router.post("/sessions/{sid}/mode")
+async def set_mode(sid: str, req: ModeRequest) -> dict:
+    s = _session(sid)
+    s.engine.set_mode(req.mode)
+    s.training = None if s.training is None else type(s.training)(s.training.d)
+    return await _reinit(s)
+
+
+async def _reinit(s: Session) -> dict:
+    """The model was rebuilt: push a full re-initialisation to clients."""
+    payload = s.payload()
+    for ws in list(s.sockets):
+        try:
+            await ws.send_json(s.init_message())
+        except Exception:  # noqa: BLE001
+            s.sockets.discard(ws)
+    s.sent_event_id = s.engine.events.last_id
+    s.sent_sample_seq = s.engine.history.last_seq
+    return payload
+
+
+@router.post("/sessions/{sid}/chemicals/{chem_id}")
+async def chemical_pump(sid: str, chem_id: str, req: PumpRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_pump(chem_id, running=req.running, discharge_pressure_pa=req.discharge_pressure_pa)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    except InvalidOperatingInput as exc:
+        raise HTTPException(422, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/integrity/tests")
+async def integrity_start(sid: str, req: IntegrityTestRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.start_integrity_test(**req.model_dump())
+    except CommandRejected as exc:
+        await s.broadcast()
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/integrity/tests/{test_id}/abort")
+async def integrity_abort(sid: str, test_id: int) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.abort_integrity_test(test_id)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
 @router.post("/sessions/{sid}/scenario")
 async def load_scenario(sid: str, req: LoadScenarioRequest) -> dict:
     s = _session(sid)
@@ -117,7 +174,7 @@ async def load_scenario(sid: str, req: LoadScenarioRequest) -> dict:
     except ScenarioNotFound:
         raise HTTPException(404, f"scenario {req.scenario_id!r} not found") from None
     s.training = None
-    return await _after_change(s)
+    return await _reinit(s)
 
 
 @router.post("/sessions/{sid}/valves/{tag}")
@@ -213,6 +270,10 @@ ws_router = APIRouter()
 @ws_router.websocket("/ws/sessions/{sid}")
 async def session_ws(websocket: WebSocket, sid: str) -> None:
     if sid not in manager.sessions:
+        # Accept first: closing during the handshake is reported to browsers
+        # as an HTTP 403 / close code 1006, so the client could never tell
+        # "session gone" (e.g. after a server restart) from a network blip.
+        await websocket.accept()
         await websocket.close(code=4404, reason="session not found")
         return
     s = manager.get(sid)

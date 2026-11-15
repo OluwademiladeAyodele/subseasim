@@ -19,6 +19,21 @@
 - [x] Per-user sessions for internal-server deployment
 - [x] Automated tests (pytest, Vitest, Playwright); Docker single-container build
 
+## Release 2a — Dynamic simulation (implemented)
+
+- [x] Dynamic mode alongside the preserved quasi-steady model (switchable per session)
+- [x] Lumped compressible hydraulic network: line-pack, wall elasticity, inertia, implicit Euler + Newton, fixed step
+- [x] Radial reservoir transient (kh from the productivity index); wellbore storage
+- [x] Branched network: A-annulus (AMV, AWV, crossover, service line, thermal APB), four chemical-injection circuits with pump, isolation, metering and check valves
+- [x] Chemical transport, mixing and mass balance on a finite-volume grid driven by calculated flows; enthalpy mixing; throttling
+- [x] Valve dead time, separate open/close stroke times, seat leakage; valve-reached and process-settled as separate events
+- [x] Transmitter dynamics (lag, update interval, resolution); concentration analysers; mid-line transmitters
+- [x] Integrity testing: stroke, pressure-hold and inflow tests with isolation verification, evolving in simulated time
+- [x] Deterministic fixed-step clock, 600x speed, achieved-speed display; trends with event markers and steady-state reference
+- [x] Training scenarios A–F; docs: DYNAMIC_SIMULATION_MODEL, PIPELINE_TRANSIENT_MODEL, CHEMICAL_TRANSPORT_MODEL, INSTRUMENT_RESPONSE_MODEL, SIMULATION_TIME_MANAGEMENT
+- [ ] Method of Characteristics option for water-hammer studies (fine step, fixed-grid pipes)
+- [ ] Mixture density/viscosity feedback into hydraulics; physical (Taylor) dispersion; pipe-wall heat capacity
+
 ## Release 2 — Advanced engineering simulator (planned)
 
 - Fluid: black-oil correlations behind `FluidModel` (cited sources and validity ranges); CoolProp for water/gas; marching solver for P/T-dependent properties

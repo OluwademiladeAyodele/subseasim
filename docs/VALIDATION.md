@@ -83,3 +83,14 @@ cd frontend && npm run e2e                        # Playwright (starts servers i
   The production serving path (FastAPI serving the built frontend and the WebSocket
   on one port) was verified without Docker. Run `docker compose up --build` to confirm.
 * Any comparison with field or vendor data (engineering-model validation).
+
+## Release 2: dynamic model
+
+`backend/tests/test_dynamic.py` (37 tests) and `test_api_dynamic.py` (5 tests) verify the
+dynamic model against analytical references (RC charging, wave travel time, plug-flow
+residence time, exponential heat loss) and required behaviour (no instantaneous jump to a
+new steady state, chemical transport and mass balance, valve dead time and travel, thermal
+mixing, determinism, pause/resume/reset, annulus isolation and bleed-down, integrity tests).
+The measured results are tabulated in [DYNAMIC_SIMULATION_MODEL.md](DYNAMIC_SIMULATION_MODEL.md#8-verification-summary).
+The e2e suite (`frontend/e2e`) now runs on the dynamic default scenario and includes
+methanol injection and the model switch. To run it on an installed browser, use `PW_CHANNEL=msedge npm run e2e`.

@@ -5,12 +5,13 @@
  */
 
 export type SimStatus = "ready" | "running" | "paused";
-export type NodeState = "flowing" | "static_reservoir" | "static_boundary" | "trapped";
-export type ElementState = "flowing" | "no_flow" | "closed";
-export type ElementKind = "inflow" | "pipe" | "valve" | "choke";
+export type SimMode = "steady" | "dynamic";
+export type NodeState = "flowing" | "static_reservoir" | "static_boundary" | "trapped" | "not_modelled";
+export type ElementState = "flowing" | "no_flow" | "closed" | "not_modelled";
+export type ElementKind = "inflow" | "pipe" | "valve" | "choke" | "check_valve";
 export type ValveCommand = "open" | "close" | "set_position";
-export type InstrumentType = "pressure" | "temperature" | "flow" | "differential_pressure";
-export type InstrumentStatus = "GOOD" | "OUT_OF_RANGE_HIGH" | "OUT_OF_RANGE_LOW" | "UNDETERMINED" | "BAD";
+export type InstrumentType = "pressure" | "temperature" | "flow" | "differential_pressure" | "concentration";
+export type InstrumentStatus = "GOOD" | "OUT_OF_RANGE_HIGH" | "OUT_OF_RANGE_LOW" | "UNDETERMINED" | "BAD" | "NOT_MODELLED";
 
 export interface ScenarioInfo {
   id: string;
@@ -26,6 +27,12 @@ export interface NodeSnapshot {
   pressure_pa: number | null;
   temperature_k: number | null;
   state: NodeState;
+  /** dynamic mode: dP/dt over the last solver step [Pa/s] */
+  rate_pa_s?: number;
+  /** dynamic mode: steady-state reference pressure (production path) */
+  steady_pressure_pa?: number | null;
+  /** fixed-pressure boundary node */
+  boundary?: boolean;
 }
 
 interface ElementBase {
@@ -36,6 +43,8 @@ interface ElementBase {
   to: string;
   state: ElementState;
   dp_pa: number | null;
+  branch?: boolean;
+  flow_m3s?: number | null;
 }
 
 export interface InflowSnapshot extends ElementBase {
@@ -55,6 +64,25 @@ export interface PipeSnapshot extends ElementBase {
   friction_dp_pa?: number;
   velocity_m_s: number | null;
   reynolds: number;
+  zone?: string;
+  inlet_flow_m3s?: number;
+  outlet_flow_m3s?: number;
+  volume_m3?: number;
+  capacitance_m3_per_pa?: number;
+  wave_speed_m_s?: number;
+  acoustic_transit_s?: number;
+  residence_time_s?: number | null;
+  segments?: number;
+  linepack_change_m3?: number;
+  pressure_profile?: { x_m: number; p_pa: number }[];
+  profile?: { x_m: number[]; t_k: number[]; c: Record<string, number[]> };
+}
+
+export interface CheckValveSnapshot extends ElementBase {
+  kind: "check_valve";
+  tag: string;
+  cracking_pressure_pa: number;
+  open?: boolean;
 }
 
 export interface RestrictionSnapshot extends ElementBase {
@@ -76,9 +104,15 @@ export interface RestrictionSnapshot extends ElementBase {
   bore_diameter_m?: number;
   loss_coefficient_open?: number;
   cv_max?: number;
+  phase?: "idle" | "delay" | "travel";
+  actuation_delay_s?: number;
+  close_stroke_time_s?: number;
+  nominal_stroke_time_s?: number | null;
+  seat_leak_area_mm2?: number;
+  leaking?: boolean;
 }
 
-export type ElementSnapshot = InflowSnapshot | PipeSnapshot | RestrictionSnapshot;
+export type ElementSnapshot = InflowSnapshot | PipeSnapshot | RestrictionSnapshot | CheckValveSnapshot;
 
 export interface InstrumentSnapshot {
   tag: string;
@@ -93,6 +127,89 @@ export interface InstrumentSnapshot {
   pv_si: number | null;
   value_si: number | null;
   status: InstrumentStatus;
+  element?: string | null;
+  distance_m?: number | null;
+  chemical?: string | null;
+  display_unit?: "ppm" | "vol%" | null;
+  response?: { time_constant_s: number; update_interval_s: number; resolution_si: number };
+}
+
+export interface ChemicalSnapshot {
+  id: string;
+  name: string;
+  status: string;
+  pump_running: boolean;
+  discharge_pressure_pa: number;
+  static_pressure_pa: number;
+  supply_pressure_pa: number;
+  injection_node: string;
+  injection_node_name: string;
+  injection_flow_m3s: number;
+  available_differential_pa: number;
+  injection_point_pressure_pa: number;
+  isolation_valve: string;
+  control_valve: string;
+  check_valve: string | null;
+  pressure_transmitter: string | null;
+  flow_transmitter: string | null;
+  fully_mixed_concentration: number;
+  cumulative_injected_m3: number;
+  in_production_line_m3: number;
+  exported_m3: number;
+  front_distance_m: number;
+  analysers: { tag: string; distance_from_injection_m: number | null; plug_flow_transit_s: number | null }[];
+  color: string;
+  display_unit: "ppm" | "vol%";
+  target_min: number | null;
+  target_max: number | null;
+}
+
+export type IntegrityType = "pressure_hold" | "inflow" | "stroke";
+
+export interface IntegrityTestSnapshot {
+  id: number;
+  type: IntegrityType;
+  name: string;
+  test_node: string | null;
+  transmitter: string | null;
+  valve: string | null;
+  stabilisation_s: number;
+  duration_s: number;
+  max_change_bar: number;
+  stroke_tolerance_pct: number;
+  started_s: number;
+  phase: "stabilising" | "holding" | "stroking" | "passed" | "failed" | "aborted";
+  hold_start_s: number | null;
+  p_hold_start_pa: number | null;
+  p_now_pa: number | null;
+  test_volume_m3: number;
+  capacitance_m3_per_bar: number;
+  trace: [number, number][];
+  result: Record<string, number | boolean>;
+  message: string;
+}
+
+export interface IntegrityPreset {
+  id: string;
+  name: string;
+  type: IntegrityType;
+  description: string;
+  test_node: string | null;
+  pressure_transmitter: string | null;
+  valve: string | null;
+  stabilisation_s: number;
+  duration_s: number;
+  max_change_bar: number;
+  stroke_tolerance_pct: number;
+}
+
+export interface ClockInfo {
+  elapsed_s: number;
+  time_of_day_s: number;
+  solver_step_s: number;
+  fixed_step: boolean;
+  achieved_speed: number | null;
+  allowed_speeds: number[];
 }
 
 export interface Diagnostic {
@@ -133,9 +250,27 @@ export interface Layout {
 
 export interface SimulationState {
   scenario: ScenarioInfo;
+  mode?: SimMode;
   status: SimStatus;
   time_s: number;
   time_scale: number;
+  clock?: ClockInfo;
+  briefing?: string[];
+  steady_reference?: { status: string; q_m3s: number | null; node_pressure_pa: Record<string, number | null>; note: string };
+  chemicals?: ChemicalSnapshot[];
+  chemical_config?: { id: string; name: string; color: string; display_unit: "ppm" | "vol%"; target_min: number | null; target_max: number | null }[];
+  integrity?: { tests: IntegrityTestSnapshot[]; test_points: { transmitter: string; node: string; description: string }[] };
+  integrity_presets?: IntegrityPreset[];
+  annulus?: { temperature_k: number } | null;
+  reservoir_model?: {
+    radii_m: number[];
+    kh_m3: number;
+    permeability_m2: number;
+    diffusivity_m2_s: number;
+    pore_volume_m3: number;
+    pressure_profile_pa: number[];
+  } | null;
+  transport_balance?: Record<string, { injected_m3: number; in_line_m3: number; exported_m3: number; to_reservoir_m3: number }>;
   model: Record<string, string>;
   boundary: {
     reservoir_pressure_pa: number;
@@ -151,6 +286,7 @@ export interface SimulationState {
     specific_heat_j_kgk: number;
     thermal_expansion_1_k: number;
     bubble_point_pressure_pa: number;
+    compressibility_1_pa?: number;
   };
   hydraulics: {
     status: "solved" | "closed_in" | "failed";
@@ -160,6 +296,9 @@ export interface SimulationState {
     residual_pa: number;
     iterations: number;
     message: string;
+    reservoir_inflow_m3s?: number;
+    max_pressure_rate_pa_s?: number;
+    process_settling?: string | null;
   };
   nodes: NodeSnapshot[];
   elements: ElementSnapshot[];
@@ -182,7 +321,7 @@ export interface SimEvent {
   detail: string | null;
 }
 
-/** Trend sample: keys "t", "q", "inst:<TAG>", "pos:<TAG>", "cmd:<TAG>", "seq". */
+/** Trend sample: keys "t", "q", "inst:<TAG>", "ref:<TAG>" (steady-state reference), "pos:<TAG>", "cmd:<TAG>", "seq". */
 export type Sample = Record<string, number | null>;
 
 // ------------------------------------------------------------------ training

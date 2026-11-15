@@ -20,7 +20,7 @@ from app.simulation.inflow.ipr import LinearIPR
 from app.simulation.valves.actuator import Actuator
 from app.simulation.valves.characteristics import Characteristic, relative_capacity
 
-ElementKind = Literal["inflow", "pipe", "valve", "choke"]
+ElementKind = Literal["inflow", "pipe", "valve", "choke", "check_valve"]
 Command = Literal["open", "close", "set_position"]
 
 
@@ -88,6 +88,10 @@ class RestrictionElement(Element):
     supports_intermediate: bool = False
     available: bool = True
     subtype: str = ""
+    #: Seat-leakage capacity Cd*A when closed [m2] (dynamic model only).
+    seat_leak_capacity: float = 0.0
+    #: Datasheet stroke time for stroke testing [s] (None = full stroke time).
+    nominal_stroke_time_s: float | None = None
 
     def capacity_at(self, position_pct: float) -> float:  # pragma: no cover - abstract
         raise NotImplementedError
@@ -147,13 +151,27 @@ class ValveElement(RestrictionElement):
 @dataclass
 class ChokeElement(RestrictionElement):
     cv_max: float = 100.0
+    service: str = "production"
 
     def __post_init__(self) -> None:
         self.kind = "choke"
-        self.subtype = "choke"
+        self.subtype = "choke" if self.service == "production" else "metering"
 
     def capacity_at(self, position_pct: float) -> float:
         return choke_capacity(self.cv_max, position_pct, self.characteristic, self.rangeability)
+
+
+@dataclass
+class CheckValveElement(Element):
+    """Non-return valve. Not operable; state follows the differential.
+    Only the dynamic network model represents it (branch subsystems)."""
+
+    tag: str = ""
+    cracking_pressure: float = 0.5e5  # Pa
+    capacity_open: float = 1e-5  # m2
+
+    def __post_init__(self) -> None:
+        self.kind = "check_valve"
 
 
 class CommandRejected(ValueError):

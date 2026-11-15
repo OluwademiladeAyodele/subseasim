@@ -1,7 +1,7 @@
-import { Dashboard } from "@/dashboard/Dashboard";
+import { Shell } from "@/app/Shell";
 import { useSimulation } from "@/hooks/useSimulation";
 
 export default function App() {
   const sim = useSimulation();
-  return <Dashboard sim={sim} />;
+  return <Shell sim={sim} />;
 }

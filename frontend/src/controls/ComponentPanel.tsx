@@ -4,7 +4,10 @@ import { Badge, Button, Input, Slider } from "@/components/ui/primitives";
 import { valveVisual, VALVE_LABEL } from "@/lib/stateColors";
 import {
   type DisplayPrefs,
+  FLOW_LABEL,
+  flowFromM3s,
   fmt,
+  formatDuration,
   instrumentDisplay,
   kToC,
   paToBarDelta,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/units";
 import type { Selection } from "@/schematic/TreeSchematic";
 import type {
+  CheckValveSnapshot,
   InflowSnapshot,
   InstrumentSnapshot,
   PipeSnapshot,
@@ -35,7 +39,7 @@ function Row({ label, value, unit, mono = true }: { label: string; value: React.
       <span className="text-muted">{label}</span>
       <span className={mono ? "num text-right text-fg" : "text-right text-fg"}>
         {value}
-        {unit && <span className="ml-1 text-[10px] text-muted">{unit}</span>}
+        {unit && <span className="ml-1 text-[11.5px] text-muted">{unit}</span>}
       </span>
     </div>
   );
@@ -44,7 +48,7 @@ function Row({ label, value, unit, mono = true }: { label: string; value: React.
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-3">
-      <h3 className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">{title}</h3>
+      <h3 className="mb-1 t-eyebrow">{title}</h3>
       {children}
     </div>
   );
@@ -56,6 +60,11 @@ const SUBTYPE: Record<string, string> = {
   wing: "Production wing valve (gate)",
   isolation: "Isolation valve",
   choke: "Production choke",
+  metering: "Chemical-injection metering valve",
+  annulus_master: "Annulus master valve (AMV)",
+  annulus_wing: "Annulus wing valve (AWV)",
+  crossover: "Crossover valve (annulus ↔ production bore)",
+  injection_isolation: "Chemical-injection isolation valve",
 };
 
 export function ComponentPanel({ state, selection, prefs, onCommand }: Props) {
@@ -79,6 +88,8 @@ export function ComponentPanel({ state, selection, prefs, onCommand }: Props) {
       return <RestrictionDetail v={el as RestrictionSnapshot} state={state} prefs={prefs} onCommand={onCommand} />;
     case "pipe":
       return <PipeDetail p={el as PipeSnapshot} state={state} prefs={prefs} />;
+    case "check_valve":
+      return <CheckValveDetail v={el as CheckValveSnapshot} state={state} prefs={prefs} />;
     default:
       return <InflowDetail e={el as InflowSnapshot} state={state} prefs={prefs} />;
   }
@@ -122,8 +133,26 @@ function RestrictionDetail({ v, state, prefs, onCommand }: { v: RestrictionSnaps
         <PositionBar actual={v.position_pct} commanded={v.commanded_pct} />
         <Row label="Actual position" value={fmt(v.position_pct, 1)} unit="%" />
         <Row label="Commanded position" value={fmt(v.commanded_pct, 1)} unit="%" />
-        <Row label="Actuation" value={v.moving ? `travelling, ~${fmt(v.time_to_target_s, 0)} s sim time` : "at commanded position"} mono={false} />
-        <Row label="Full-stroke time" value={fmt(v.full_stroke_time_s, 0)} unit="s" />
+        <Row
+          label="Actuation"
+          value={v.moving ? `${v.phase === "delay" ? "control-signal dead time" : "travelling"}, ~${fmt(v.time_to_target_s, 0)} s sim time` : "at commanded position"}
+          mono={false}
+        />
+        <Row label="Full-stroke time (open)" value={fmt(v.full_stroke_time_s, 0)} unit="s" />
+        {v.close_stroke_time_s !== undefined && v.close_stroke_time_s !== v.full_stroke_time_s && (
+          <Row label="Full-stroke time (close)" value={fmt(v.close_stroke_time_s, 0)} unit="s" />
+        )}
+        {!!v.actuation_delay_s && <Row label="Actuation dead time" value={fmt(v.actuation_delay_s, 1)} unit="s" />}
+        {v.nominal_stroke_time_s != null && <Row label="Datasheet stroke time" value={fmt(v.nominal_stroke_time_s, 0)} unit="s" />}
+        {!!v.seat_leak_area_mm2 && (
+          <Row label="Seat leak path (closed)" value={v.seat_leak_area_mm2.toExponential(1)} unit="mm² Cd·A" />
+        )}
+        {v.leaking && <p className="mt-1 text-fault">Closed, but fluid is passing the seat (leak flow {fmt((v.flow_m3s ?? 0) * 6e7, 3)} mL/min).</p>}
+        {state.mode === "dynamic" && v.moving && (
+          <p className="mt-1 text-[12.5px] text-info">
+            The valve's travel and the process response are separate: pressures and flows keep evolving after the valve reaches its position.
+          </p>
+        )}
         {!v.available && <p className="mt-1 text-fault">Component unavailable (faulted): no operations accepted.</p>}
         {state.status !== "running" && v.moving && (
           <p className="mt-1 text-warn">Simulation is not running: travel resumes when simulation time runs.</p>
@@ -160,13 +189,13 @@ function RestrictionDetail({ v, state, prefs, onCommand }: { v: RestrictionSnaps
 
       <Section title="Model parameters">
         <Row label="Characteristic" value={v.characteristic.replace("_", " ")} mono={false} />
-        <p className="py-1 text-[11px] text-dim">{v.characteristic_description}</p>
+        <p className="py-1 text-[12.5px] text-dim">{v.characteristic_description}</p>
         {v.cv_max !== undefined && <Row label="Cv at 100 %" value={fmt(v.cv_max, 1)} unit="US gpm/psi½" />}
         {v.cv_max !== undefined && <Row label="Rangeability" value={fmt(v.rangeability, 0)} />}
         {v.loss_coefficient_open !== undefined && <Row label="K fully open" value={fmt(v.loss_coefficient_open, 2)} />}
         {v.bore_diameter_m !== undefined && <Row label="Bore" value={fmt(v.bore_diameter_m * 1000, 0)} unit="mm" />}
         <Row label="Effective Cd·A now" value={(v.capacity_m2 * 1e6).toFixed(2)} unit="mm²" />
-        <p className="mt-1 text-[11px] text-dim">Generic characteristic for training — not manufacturer performance data.</p>
+        <p className="mt-1 text-[12.5px] text-dim">Generic characteristic for training — not manufacturer performance data.</p>
       </Section>
     </div>
   );
@@ -202,6 +231,72 @@ function PipeDetail({ p, state, prefs }: { p: PipeSnapshot; state: SimulationSta
         <Row label="Velocity" value={fmt(p.velocity_m_s, 2)} unit="m/s" />
         <Row label="Reynolds number" value={fmt(p.reynolds, 0)} />
       </Section>
+      {p.wave_speed_m_s !== undefined && (
+        <Section title="Dynamic model">
+          <Row label="Inlet / outlet flow" value={`${fmt(flowFromM3s(p.inlet_flow_m3s ?? 0, prefs.flowUnit), 1)} / ${fmt(flowFromM3s(p.outlet_flow_m3s ?? 0, prefs.flowUnit), 1)}`} unit={FLOW_LABEL[prefs.flowUnit]} />
+          <Row label="Internal volume" value={fmt(p.volume_m3, 2)} unit="m³" />
+          <Row label="Capacitance V(c_f + c_wall)" value={fmt((p.capacitance_m3_per_pa ?? 0) * 1e5 * 1000, 2)} unit="L/bar" />
+          <Row label="Pressure-wave speed a" value={fmt(p.wave_speed_m_s, 0)} unit="m/s" />
+          <Row label="Acoustic transit L/a" value={fmt(p.acoustic_transit_s, 1)} unit="s" />
+          <Row label="Residence time V/Q (plug flow)" value={formatDuration(p.residence_time_s)} mono={false} />
+          <Row label="Line-pack change since t=0" value={fmt((p.linepack_change_m3 ?? 0) * 1000, 1)} unit="L" />
+          <Row label="Hydraulic segments" value={fmt(p.segments, 0)} />
+          {p.pressure_profile && <Profile p={p} prefs={prefs} />}
+          <p className="mt-1 text-[12.5px] text-dim">
+            Pressure changes travel at ~a (waves) but the fluid itself — and any chemical in it — moves at the flow velocity. These are separate effects.
+          </p>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function Profile({ p, prefs }: { p: PipeSnapshot; prefs: DisplayPrefs }) {
+  const pts = p.pressure_profile ?? [];
+  if (pts.length < 2) return null;
+  const W = 300;
+  const H = 60;
+  const ys = pts.map((q) => pressureFromPa(q.p_pa, prefs.pressureRef));
+  const lo = Math.min(...ys);
+  const hi = Math.max(...ys);
+  const span = Math.max(hi - lo, 0.05);
+  const d = pts.map((q, i) => `${i ? "L" : "M"}${((q.x_m / p.length_m) * W).toFixed(1)},${(H - 6 - ((ys[i] - lo) / span) * (H - 12)).toFixed(1)}`).join(" ");
+  return (
+    <div className="mt-1">
+      <div className="text-[11.5px] text-dim">Pressure along the pipe (hydraulic nodes)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-[60px] w-full rounded-md bg-bg">
+        <path d={d} fill="none" stroke="#38bdf8" strokeWidth={1.5} />
+        {pts.map((q, i) => (
+          <circle key={i} cx={(q.x_m / p.length_m) * W} cy={H - 6 - ((ys[i] - lo) / span) * (H - 12)} r={1.6} fill="#38bdf8" />
+        ))}
+        <text x={3} y={9} fontSize={8} fill="#7d8da1" className="num">
+          {fmt(hi, 1)}
+        </text>
+        <text x={3} y={H - 1} fontSize={8} fill="#7d8da1" className="num">
+          {fmt(lo, 1)} {prefs.pressureRef}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function CheckValveDetail({ v, state, prefs }: { v: CheckValveSnapshot; state: SimulationState; prefs: DisplayPrefs }) {
+  return (
+    <div className="p-3" data-testid="component-panel">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="num text-base font-bold text-fg">{v.tag}</div>
+          <div className="text-muted">{v.name}</div>
+        </div>
+        <Badge tone={v.state === "flowing" ? "ok" : "neutral"}>{v.state === "flowing" ? "OPEN (flowing)" : v.state === "closed" ? "CLOSED" : "NO FLOW"}</Badge>
+      </div>
+      <Section title="Non-return valve">
+        <Row label="Cracking pressure" value={fmt(paToBarDelta(v.cracking_pressure_pa), 2)} unit="bar" />
+        <Row label="Upstream pressure" value={<P pa={nodePressure(state, v.from)} prefs={prefs} />} unit={prefs.pressureRef} />
+        <Row label="Downstream pressure" value={<P pa={nodePressure(state, v.to)} prefs={prefs} />} unit={prefs.pressureRef} />
+        <Row label="Flow" value={fmt((v.flow_m3s ?? 0) * 3.6e6, 2)} unit="L/h" />
+      </Section>
+      <p className="mt-2 text-[12.5px] text-dim">Opens when the forward differential exceeds the cracking pressure; reverse flow is blocked. Not operable.</p>
     </div>
   );
 }
@@ -219,18 +314,26 @@ function InflowDetail({ e, state, prefs }: { e: InflowSnapshot; state: Simulatio
         <Row label="Productivity index J" value={fmt(piSiToField(e.productivity_index_si), 2)} unit="(m³/d)/bar" />
         <Row label="Reservoir temperature" value={fmt(kToC(state.boundary.reservoir_temperature_k), 1)} unit="°C" />
       </Section>
-      <p className="mt-2 text-[11px] text-dim">Reservoir pressure is a fixed boundary (no depletion in Release 1). Change it under Conditions.</p>
+      <p className="mt-2 text-[12.5px] text-dim">Reservoir pressure is a fixed boundary (no depletion in Release 1). Change it under Conditions.</p>
     </div>
   );
 }
 
 function InstrumentDetail({ inst, state, prefs }: { inst: InstrumentSnapshot; state: SimulationState; prefs: DisplayPrefs }) {
-  const m = instrumentDisplay(inst.type, inst.value_si, prefs);
-  const pv = instrumentDisplay(inst.type, inst.pv_si, prefs);
-  const lo = instrumentDisplay(inst.type, inst.range_min_si, prefs);
-  const hi = instrumentDisplay(inst.type, inst.range_max_si, prefs);
+  const u = inst.display_unit;
+  const m = instrumentDisplay(inst.type, inst.value_si, prefs, u);
+  const pv = instrumentDisplay(inst.type, inst.pv_si, prefs, u);
+  const lo = instrumentDisplay(inst.type, inst.range_min_si, prefs, u);
+  const hi = instrumentDisplay(inst.type, inst.range_max_si, prefs, u);
+  const unit = inst.type === "concentration" ? (u ?? "ppm") : unitLabel(inst.type, prefs);
   const node = (id: string | null) => state.nodes.find((n) => n.id === id)?.name ?? id ?? "—";
-  const where = inst.type === "differential_pressure" ? `${node(inst.high_node)} → ${node(inst.low_node)}` : node(inst.node);
+  const where =
+    inst.type === "differential_pressure"
+      ? `${node(inst.high_node)} → ${node(inst.low_node)}`
+      : inst.element
+        ? `${state.elements.find((e) => e.id === inst.element)?.name ?? inst.element}${inst.distance_m != null ? ` @ ${fmt(inst.distance_m, 0)} m` : ""}`
+        : node(inst.node);
+  const r = inst.response;
   return (
     <div className="p-3" data-testid="component-panel">
       <div className="flex items-start justify-between">
@@ -241,16 +344,32 @@ function InstrumentDetail({ inst, state, prefs }: { inst: InstrumentSnapshot; st
         <Badge tone={inst.status === "GOOD" ? "ok" : inst.status.startsWith("OUT") ? "warn" : "fault"}>{inst.status.replace(/_/g, " ")}</Badge>
       </div>
       <Section title="Measurement (simulated)">
-        <Row label="Displayed measurement" value={fmt(m.value, m.digits)} unit={unitLabel(inst.type, prefs)} />
-        <Row label="Model process value" value={fmt(pv.value, pv.digits)} unit={unitLabel(inst.type, prefs)} />
-        <Row label="Calibrated range" value={`${fmt(lo.value, 0)} – ${fmt(hi.value, 0)}`} unit={unitLabel(inst.type, prefs)} />
+        <Row label="Displayed measurement" value={fmt(m.value, m.digits)} unit={unit} />
+        <Row label="Model process value" value={fmt(pv.value, pv.digits)} unit={unit} />
+        <Row label="Calibrated range" value={`${fmt(lo.value, 0)} – ${fmt(hi.value, 0)}`} unit={unit} />
         <Row label="Location" value={where} mono={false} />
         <Row label="Type" value={inst.type.replace("_", " ")} mono={false} />
       </Section>
-      <p className="mt-2 text-[11px] text-dim">
-        Release 1 transmitters are ideal: measurement equals the model value within range, saturates at range limits outside it, and shows no value when
-        the model cannot determine one.
-      </p>
+      {r && state.mode === "dynamic" ? (
+        <Section title="Transmitter response (dynamic model)">
+          <Row label="Sensor time constant" value={fmt(r.time_constant_s, 1)} unit="s" />
+          <Row label="Update interval" value={r.update_interval_s > 0 ? fmt(r.update_interval_s, 0) : "every solver step"} unit={r.update_interval_s > 0 ? "s" : undefined} mono={r.update_interval_s > 0} />
+          <Row
+            label="Resolution"
+            value={r.resolution_si > 0 ? fmt(instrumentDisplay(inst.type === "pressure" ? "differential_pressure" : inst.type, r.resolution_si, prefs, u).value, 4) : "none"}
+          />
+          <p className="mt-1 text-[12.5px] text-dim">
+            Sensor dynamics act ON TOP of the modelled process dynamics: the process value above already evolves in time; the displayed measurement
+            additionally lags, holds and quantises it.
+          </p>
+        </Section>
+      ) : (
+        <p className="mt-2 text-[12.5px] text-dim">
+          {inst.status === "NOT_MODELLED"
+            ? "This transmitter is on a subsystem that the quasi-steady model does not represent. Switch to the dynamic model."
+            : "Quasi-steady transmitters are ideal: measurement equals the model value within range, saturates at range limits outside it, and shows no value when the model cannot determine one."}
+        </p>
+      )}
     </div>
   );
 }
