@@ -19,15 +19,27 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
-InstrumentType = Literal["pressure", "temperature", "flow", "differential_pressure"]
-Status = Literal["GOOD", "OUT_OF_RANGE_HIGH", "OUT_OF_RANGE_LOW", "UNDETERMINED", "BAD"]
+InstrumentType = Literal["pressure", "temperature", "flow", "differential_pressure", "concentration"]
+#: NOT_MODELLED: the instrument sits on a subsystem that the active model
+#: does not represent (branch subsystems in quasi-steady mode).
+Status = Literal["GOOD", "OUT_OF_RANGE_HIGH", "OUT_OF_RANGE_LOW", "UNDETERMINED", "BAD", "NOT_MODELLED"]
 
 SI_UNIT: dict[str, str] = {
     "pressure": "Pa(a)",
     "differential_pressure": "Pa",
     "temperature": "K",
     "flow": "m3/s",
+    "concentration": "m3/m3",
 }
+
+
+@dataclass
+class InstrumentResponse:
+    """Transmitter dynamics, applied to the PV in the dynamic model only."""
+
+    time_constant_s: float = 0.0
+    update_interval_s: float = 0.0
+    resolution_si: float = 0.0
 
 
 @dataclass
@@ -40,6 +52,11 @@ class Instrument:
     low_node: str | None
     range_min: float  # SI
     range_max: float  # SI
+    element: str | None = None
+    distance_m: float | None = None
+    chemical: str | None = None
+    display_unit: str | None = None
+    response: InstrumentResponse | None = None
 
     @property
     def unit(self) -> str:
@@ -54,6 +71,19 @@ class Reading:
     status: Status
 
 
+def classify(inst: Instrument, pv: float | None) -> Reading:
+    """Range / validity status for an already-determined measurement value."""
+    if pv is None:
+        return Reading(inst.tag, None, None, "UNDETERMINED")
+    if not math.isfinite(pv):
+        return Reading(inst.tag, None, None, "BAD")
+    if pv > inst.range_max:
+        return Reading(inst.tag, pv, inst.range_max, "OUT_OF_RANGE_HIGH")
+    if pv < inst.range_min:
+        return Reading(inst.tag, pv, inst.range_min, "OUT_OF_RANGE_LOW")
+    return Reading(inst.tag, pv, pv, "GOOD")
+
+
 def measure(
     inst: Instrument,
     calc_ok: bool,
@@ -63,7 +93,11 @@ def measure(
 ) -> Reading:
     if not calc_ok:
         return Reading(inst.tag, None, None, "BAD")
+    if inst.type == "concentration" or inst.element is not None:
+        return Reading(inst.tag, None, None, "NOT_MODELLED")
     pv: float | None
+    if inst.node is not None and inst.node not in node_pressure:
+        return Reading(inst.tag, None, None, "NOT_MODELLED")
     if inst.type == "pressure":
         pv = node_pressure.get(inst.node)  # type: ignore[arg-type]
     elif inst.type == "temperature":

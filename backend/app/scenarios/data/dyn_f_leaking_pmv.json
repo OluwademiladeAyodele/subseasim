@@ -1,0 +1,15 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_f_leaking_pmv",
+  "name": "Dynamic F - Valve integrity: leaking PMV (illustrative)",
+  "description": "PMV-101 has a small seat leak (configured leak path 0.0001 mm2 Cd.A) and PWV-101 a slower actuator. Perform the PMV inflow test and PWV stroke test from the Integrity panel and interpret the results. All data ILLUSTRATIVE - acceptance limits are training values.",
+  "element_overrides": {
+    "PMV": {"seat_leak_area_mm2": 0.0001},
+    "PWV": {"full_stroke_time_s": 42, "close_stroke_time_s": 42}
+  },
+  "briefing": [
+    "PMV inflow test: close PMV-101, let the cavity bleed to flowline pressure through PWV-101, close PWV-101, then start the 'PMV inflow' test.",
+    "The cavity pressure (PT-104) rises only if fluid crosses the closed PMV seat: C dP/dt = Q_leak + thermal expansion.",
+    "Stroke-test PWV-101 and compare the measured time with the 32 s datasheet value."
+  ]
+}

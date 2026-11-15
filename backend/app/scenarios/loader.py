@@ -50,11 +50,14 @@ def _resolve(doc_id: str, raw: dict[str, dict], seen: tuple[str, ...] = ()) -> d
     if parent_id:
         doc = _deep_merge(_resolve(parent_id, raw, seen + (doc_id,)), doc)
     if overrides:
-        known = {e["id"] for e in doc["elements"]}
+        sub = doc.get("subsystems", {}).get("elements", [])
+        known = {e["id"] for e in doc["elements"]} | {e["id"] for e in sub}
         unknown = set(overrides) - known
         if unknown:
             raise ValueError(f"element_overrides reference unknown elements: {sorted(unknown)}")
         doc["elements"] = [_deep_merge(e, overrides.get(e["id"], {})) for e in doc["elements"]]
+        if sub:
+            doc["subsystems"]["elements"] = [_deep_merge(e, overrides.get(e["id"], {})) for e in sub]
     return doc
 
 

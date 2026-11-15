@@ -1,0 +1,12 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_d_flowrate_change",
+  "name": "Dynamic D - Flow-rate change and chemical arrival time (illustrative)",
+  "description": "Corrosion inhibitor and biocide are injecting continuously at steady state. Stop the biocide (close CIV-303), then change the choke: the production velocity changes, so the time the biocide tail takes to reach AT-531 and AT-532 changes. All data ILLUSTRATIVE.",
+  "element_overrides": {"CIV302": {"initial_position_pct": 100}, "CIV303": {"initial_position_pct": 100}},
+  "briefing": [
+    "Both chemicals start at their steady, fully-mixed concentrations along the flowline.",
+    "Close CIV-303 and note the plug-flow transit estimates in the Chemicals panel.",
+    "Open the choke (e.g. 30 % -> 60 %) or close it (-> 15 %) and compare when AT-531 / AT-532 fall: higher flow, shorter transit."
+  ]
+}

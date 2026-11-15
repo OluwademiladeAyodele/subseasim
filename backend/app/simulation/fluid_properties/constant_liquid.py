@@ -19,6 +19,10 @@ class ConstantPropertyLiquid:
     cp: float  # J/(kg K)
     beta: float  # 1/K
     p_bubble: float  # Pa abs
+    #: Isothermal compressibility [1/Pa]. Dynamic model only (line-pack and
+    #: pressure build-up); the quasi-steady solver treats the liquid as
+    #: incompressible and never reads it.
+    compressibility: float = 7.0e-10
 
     is_constant_property: bool = True
 

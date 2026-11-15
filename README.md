@@ -10,6 +10,23 @@ All values come from a documented engineering model.
 > operational decisions, and has no interface to real subsea, SCADA, DCS or control
 > systems.
 
+## Features (Release 2: dynamic simulation)
+
+* **Dynamic model** (default for new sessions, scenario `subsea_dynamic_base`). Pressure,
+  temperature, flow and chemical concentration evolve over simulated time from mass,
+  momentum and energy balances: line-pack, wellbore storage, radial reservoir transient,
+  thermal expansion of trapped fluid. The quasi-steady Release 1 model remains selectable
+  (Dynamic / Steady switch).
+* A-annulus with AMV, AWV, crossover and service line. Four chemical-injection circuits
+  (methanol, corrosion inhibitor, biocide, wax inhibitor) injecting into the production
+  path, with transport, mixing and mass balance.
+* Valve dead time, separate open/close stroke times, seat leakage. Valve end of travel and
+  process settling are reported separately.
+* Integrity testing: stroke, pressure-hold and inflow tests with isolation verification.
+* Fixed-step, deterministic clock (1×–600×). Trends against simulated time with event
+  markers and steady-state reference lines. Schematic zoom and pan with chemical-front bands.
+* Training scenarios A–F (`dyn_*`). See [docs/DYNAMIC_SIMULATION_MODEL.md](docs/DYNAMIC_SIMULATION_MODEL.md).
+
 ## Features (Release 1)
 
 * Interactive SVG tree schematic generated from scenario configuration, with
@@ -85,6 +102,8 @@ Engineering parameters live only in scenario files.
 
 ## Documentation
 
+* [Dynamic simulation model](docs/DYNAMIC_SIMULATION_MODEL.md): Release 2 overview, audit, verification
+* [Pipeline transient model](docs/PIPELINE_TRANSIENT_MODEL.md) · [Chemical transport](docs/CHEMICAL_TRANSPORT_MODEL.md) · [Instrument response](docs/INSTRUMENT_RESPONSE_MODEL.md) · [Simulation time](docs/SIMULATION_TIME_MANAGEMENT.md)
 * [Architecture](docs/ARCHITECTURE.md)
 * [Engineering assumptions](docs/ENGINEERING_ASSUMPTIONS.md): units, equations, limitations
 * [Simulation model](docs/SIMULATION_MODEL.md): modules, step sequence, CoolProp evaluation

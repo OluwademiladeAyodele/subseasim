@@ -1,0 +1,11 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_b_valve_closure",
+  "name": "Dynamic B - Production valve closure (illustrative)",
+  "description": "Base dynamic system. Close PWV-101 (or PMV-101) and compare the response on BOTH sides of the valve: build-up upstream, line-pack drain-down and boundary settling downstream, flow decay along the flowline. All data ILLUSTRATIVE.",
+  "briefing": [
+    "Watch PT-102 (upstream of choke), PT-103 (downstream), PT-202 (flowline mid-point) and FT-101 while PWV-101 closes.",
+    "Upstream volumes pack up; downstream the flowline drains to the manifold until it settles at boundary pressure plus hydrostatic head.",
+    "The 'valve reached position' event and the 'process settled' event are logged separately."
+  ]
+}

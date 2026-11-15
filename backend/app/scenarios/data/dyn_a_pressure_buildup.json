@@ -1,0 +1,16 @@
+{
+  "extends": "subsea_dynamic_base",
+  "id": "dyn_a_pressure_buildup",
+  "name": "Dynamic A - Shut-in pressure build-up (illustrative)",
+  "description": "High-rate producer (choke 50 %, reservoir 430 bara, compact drainage area). Close PWV-101 and watch PT-101 and PT-001 build up from the flowing pressure toward the shut-in pressure. The build-up is calculated from wellbore storage (live-oil compressibility + tubing elasticity) and radial reservoir diffusion - it is not a programmed ramp. All data ILLUSTRATIVE.",
+  "fluid": {"compressibility_1_bar": 1.5e-4},
+  "reservoir": {"pressure_bara": 430, "productivity_index_m3d_per_bar": 18},
+  "element_overrides": {"CHOKE": {"initial_position_pct": 50}},
+  "dynamics": {"reservoir": {"drainage_radius_m": 120, "total_compressibility_1_bar": 1.0e-4, "net_thickness_m": 25}},
+  "briefing": [
+    "Start the simulation and note PT-101 (tree) and PT-001 (downhole gauge).",
+    "Close PWV-101. The valve finishes travelling in ~32 s; the pressures keep rising for much longer.",
+    "Early rise: wellbore storage (the liquid column is compressed by the reservoir afterflow). Late rise: the pressure disturbance diffuses outward through the reservoir.",
+    "Compare the evolving PT-101 trend with the dashed steady-state reference (the final shut-in pressure)."
+  ]
+}

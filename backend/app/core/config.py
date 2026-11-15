@@ -25,18 +25,25 @@ class Settings:
     tick_period_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_TICK_PERIOD_S", 0.25))
     #: Largest simulation-time sub-step used by the integrator [s].
     max_substep_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_MAX_SUBSTEP_S", 5.0))
+    #: FIXED step of the dynamic solver [s]. Independent of simulation speed
+    #: and of the wall-clock tick: speeding up the simulation runs more
+    #: steps per tick, never larger steps.
+    dynamic_step_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_DYNAMIC_STEP_S", 1.0))
     #: Minimum simulation time between stored trend samples [s].
     sample_interval_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_SAMPLE_INTERVAL_S", 1.0))
     #: Trend-history ring-buffer length (samples per session).
-    history_length: int = field(default_factory=lambda: _env_int("SUBSEASIM_HISTORY_LENGTH", 3600))
+    history_length: int = field(default_factory=lambda: _env_int("SUBSEASIM_HISTORY_LENGTH", 7200))
     #: Max event-log entries kept per session.
     event_log_length: int = field(default_factory=lambda: _env_int("SUBSEASIM_EVENT_LOG_LENGTH", 500))
     #: Max concurrent sessions on one server.
     max_sessions: int = field(default_factory=lambda: _env_int("SUBSEASIM_MAX_SESSIONS", 50))
     #: Sessions with no websocket and no activity for this long are removed [s].
     session_idle_timeout_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_SESSION_IDLE_TIMEOUT_S", 4 * 3600))
+    #: A RUNNING session with no connected browser for this long is paused
+    #: automatically, so unattended simulations never consume the server [s].
+    orphan_pause_s: float = field(default_factory=lambda: _env_float("SUBSEASIM_ORPHAN_PAUSE_S", 30.0))
     #: Allowed simulation speed multipliers.
-    allowed_time_scales: tuple[float, ...] = (1.0, 10.0, 60.0, 300.0)
+    allowed_time_scales: tuple[float, ...] = (1.0, 10.0, 60.0, 300.0, 600.0)
     #: Directory with built frontend (served in production). Empty = not served.
     frontend_dist: str = field(default_factory=lambda: os.environ.get("SUBSEASIM_FRONTEND_DIST", ""))
     #: Comma-separated CORS origins for development.
