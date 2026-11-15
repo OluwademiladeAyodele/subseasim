@@ -50,7 +50,8 @@ export const cpToPas = (mu: number) => mu / 1000;
 
 export function fmt(v: number | null | undefined, digits = 1): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return v.toFixed(digits);
+  const s = v.toFixed(digits);
+  return /^-0(\.0+)?$/.test(s) ? s.slice(1) : s;
 }
 
 export function formatSimTime(s: number): string {
@@ -68,11 +69,36 @@ export interface DisplayPrefs {
   flowUnit: FlowUnit;
 }
 
+/** Volume fraction -> ppm or vol%. */
+export function concFromFraction(v: number, unit: "ppm" | "vol%" | null | undefined): number {
+  return (unit ?? "ppm") === "ppm" ? v * 1e6 : v * 100;
+}
+
+/** "HH:MM" time of day from seconds after midnight. */
+export function formatTimeOfDay(s: number): string {
+  const t = ((Math.floor(s) % 86400) + 86400) % 86400;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(Math.floor(t / 3600))}:${pad(Math.floor((t % 3600) / 60))}`;
+}
+
+/** Compact duration: 45 s, 12 min, 2.4 h. */
+export function formatDuration(s: number | null | undefined): string {
+  if (s === null || s === undefined || !Number.isFinite(s)) return "—";
+  if (s < 90) return `${s.toFixed(0)} s`;
+  if (s < 5400) return `${(s / 60).toFixed(0)} min`;
+  return `${(s / 3600).toFixed(1)} h`;
+}
+
 export function instrumentDisplay(
   type: string,
   valueSi: number | null,
   prefs: DisplayPrefs,
+  concUnit?: "ppm" | "vol%" | null,
 ): { value: number | null; unit: string; digits: number } {
+  if (type === "concentration") {
+    const unit = concUnit ?? "ppm";
+    return { value: valueSi === null ? null : concFromFraction(valueSi, unit), unit, digits: unit === "ppm" ? 1 : 2 };
+  }
   if (valueSi === null) {
     const unit = unitLabel(type, prefs);
     return { value: null, unit, digits: 1 };

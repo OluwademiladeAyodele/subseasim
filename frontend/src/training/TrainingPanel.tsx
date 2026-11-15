@@ -24,7 +24,7 @@ function List({ items }: { items: string[] }) {
 }
 
 function H({ children }: { children: React.ReactNode }) {
-  return <h4 className="mb-1 mt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">{children}</h4>;
+  return <h4 className="mb-1 mt-3 t-eyebrow">{children}</h4>;
 }
 
 export function TrainingPanel({ training, exercises, onStart, onAnswer, onAdvance, onStop }: Props) {
@@ -33,7 +33,7 @@ export function TrainingPanel({ training, exercises, onStart, onAnswer, onAdvanc
       <div className="space-y-3 p-3" data-testid="training-panel">
         <p className="text-muted">Guided exercises load their own scenario and assess your understanding from the simulation results.</p>
         {exercises.map((ex) => (
-          <div key={ex.id} className="border border-line bg-panel-2 p-2.5">
+          <div key={ex.id} className="rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow-card)]">
             <div className="font-bold">{ex.title}</div>
             <H>Learning objectives</H>
             <List items={ex.objectives} />
@@ -42,7 +42,7 @@ export function TrainingPanel({ training, exercises, onStart, onAnswer, onAdvanc
             </div>
           </div>
         ))}
-        <p className="text-[11px] text-dim">Exercises 1, 2 and 4–10 are planned (see docs/ROADMAP.md).</p>
+        <p className="text-[12.5px] text-dim">Exercises 1, 2 and 4–10 are planned (see docs/ROADMAP.md).</p>
       </div>
     );
   }
@@ -65,7 +65,7 @@ function ActiveExercise({ t, onAnswer, onAdvance, onStop }: { t: TrainingState; 
         </div>
         <ol className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
           {t.steps.map((s, i) => (
-            <li key={s.id} title={s.title} className="flex items-center gap-0.5 text-[10px] text-dim">
+            <li key={s.id} title={s.title} className="flex items-center gap-0.5 text-[11.5px] text-dim">
               {s.status === "complete" ? <Check size={11} className="text-ok" /> : s.status === "current" ? <CircleDot size={11} className="text-accent" /> : <Circle size={11} />}
               {i + 1}
             </li>
@@ -164,7 +164,7 @@ function ActiveExercise({ t, onAnswer, onAdvance, onStop }: { t: TrainingState; 
 
 function ReviewTable({ table }: { table: { columns: string[]; rows: (string | number)[][] } }) {
   return (
-    <table className="mt-2 w-full border-collapse text-[11px]">
+    <table className="mt-2 w-full border-collapse text-[12.5px]">
       <thead>
         <tr>
           {table.columns.map((c) => (
@@ -195,13 +195,13 @@ function Summary({ t }: { t: TrainingState }) {
     <div className="mt-2 space-y-3" data-testid="training-summary">
       <div className="grid grid-cols-2 gap-2">
         <div className="border border-line bg-panel-2 p-2">
-          <div className="text-[10px] font-bold uppercase text-dim">Assessment questions</div>
+          <div className="text-[11.5px] font-bold uppercase text-dim">Assessment questions</div>
           <div className="num text-xl">
             {s.questions_correct} / {s.questions_total}
           </div>
         </div>
         <div className="border border-line bg-panel-2 p-2">
-          <div className="text-[10px] font-bold uppercase text-dim">Predictions matching result</div>
+          <div className="text-[11.5px] font-bold uppercase text-dim">Predictions matching result</div>
           <div className="num text-xl">
             {s.predictions_correct} / {s.predictions_resolved}
           </div>
@@ -215,7 +215,7 @@ function Summary({ t }: { t: TrainingState }) {
             <div>
               You predicted: <span className="text-accent">{p.choice_text}</span>. Simulation: <span className="text-fg">{p.correct_text ?? "unresolved"}</span>
             </div>
-            {p.explanation && <p className="text-[11px] text-muted">{p.explanation}</p>}
+            {p.explanation && <p className="text-[12.5px] text-muted">{p.explanation}</p>}
           </div>
         ))}
       </div>
@@ -227,7 +227,7 @@ function Summary({ t }: { t: TrainingState }) {
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-dim">
+      <p className="text-[12.5px] text-dim">
         Duration {Math.round((t.summary?.duration_s ?? 0) / 60)} min. Explanations refer to this simulation run with illustrative data; they are not real-world
         operating instructions.
       </p>

@@ -39,7 +39,7 @@ function FieldRow({ f, onChange, invalid }: { f: Field; onChange: (v: string) =>
     <label className="grid grid-cols-[1fr_96px_64px] items-center gap-2 py-0.5">
       <span className="text-muted">{f.label}</span>
       <Input aria-label={f.label} inputMode="decimal" value={f.value} aria-invalid={invalid} onChange={(e) => onChange(e.target.value)} />
-      <span className="text-[11px] text-dim">{f.unit}</span>
+      <span className="text-[12.5px] text-dim">{f.unit}</span>
     </label>
   );
 }
@@ -98,29 +98,29 @@ export function ConditionsPanel({ state, prefs, onBoundary, onFluid }: Props) {
   return (
     <div className="space-y-4 p-3" data-testid="conditions-panel">
       <div>
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Reservoir &amp; boundary conditions</h3>
+        <h3 className="mb-1 t-eyebrow">Reservoir &amp; boundary conditions</h3>
         {bFields.map((x) => (
           <FieldRow key={x.key} f={x} invalid={bInvalid(x.key)} onChange={(v) => setB(x.key, v)} />
         ))}
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[11px] text-dim">Pressures in {ref === "bara" ? "bar absolute" : "bar gauge (ref. 1.01325 bar)"}</span>
+          <span className="text-[12.5px] text-dim">Pressures in {ref === "bara" ? "bar absolute" : "bar gauge (ref. 1.01325 bar)"}</span>
           <Button variant="primary" size="sm" disabled={bFields.some((x) => bInvalid(x.key))} onClick={applyBoundary}>Apply conditions</Button>
         </div>
-        <p className="mt-2 text-[11px] text-dim">
+        <p className="mt-2 text-[12.5px] text-dim">
           Reservoir pressure drives inflow through the IPR; it is not the pressure in the tree. The solver finds the rate at which inflow balances the
           system resistance down to the downstream pressure.
         </p>
       </div>
       <div>
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Fluid (constant-property liquid)</h3>
-        <p className="mb-1 text-[11px] text-warn">{f.name} — illustrative data</p>
+        <h3 className="mb-1 t-eyebrow">Fluid (constant-property liquid)</h3>
+        <p className="mb-1 text-[12.5px] text-warn">{f.name} — illustrative data</p>
         {fFields.map((x) => (
           <FieldRow key={x.key} f={x} invalid={fInvalid(x.key)} onChange={(v) => setF(x.key, v)} />
         ))}
         <div className="mt-2 flex justify-end">
           <Button variant="primary" size="sm" disabled={fFields.some((x) => fInvalid(x.key))} onClick={applyFluid}>Apply fluid</Button>
         </div>
-        <p className="mt-2 text-[11px] text-dim">
+        <p className="mt-2 text-[12.5px] text-dim">
           Below the bubble point gas would evolve; the single-phase model then flags its results as invalid rather than modelling two-phase flow.
         </p>
       </div>

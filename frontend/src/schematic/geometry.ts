@@ -23,6 +23,34 @@ export function pointAlong(pts: LayoutPoint[], f: number): { x: number; y: numbe
   return { x: pts[0].x, y: pts[0].y, angle: 0 };
 }
 
+/** Sub-polyline between fractions f0 < f1 of the total length. */
+export function subPath(pts: LayoutPoint[], f0: number, f1: number): LayoutPoint[] {
+  const total = polylineLength(pts);
+  const a = Math.max(0, Math.min(1, f0)) * total;
+  const b = Math.max(0, Math.min(1, f1)) * total;
+  const out: LayoutPoint[] = [];
+  let acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i];
+    const q = pts[i + 1];
+    const seg = Math.hypot(q.x - p.x, q.y - p.y);
+    const s0 = acc;
+    const s1 = acc + seg;
+    if (s1 >= a && s0 <= b && seg > 0) {
+      const t0 = Math.max(0, (a - s0) / seg);
+      const t1 = Math.min(1, (b - s0) / seg);
+      if (!out.length) out.push({ x: p.x + (q.x - p.x) * t0, y: p.y + (q.y - p.y) * t0 });
+      out.push({ x: p.x + (q.x - p.x) * t1, y: p.y + (q.y - p.y) * t1 });
+    }
+    acc = s1;
+  }
+  return out;
+}
+
+export function pathD(pts: LayoutPoint[]): string {
+  return pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+}
+
 /** Midpoints of every segment long enough to carry a flow arrow. */
 export function arrowPositions(pts: LayoutPoint[], minLen = 60): { x: number; y: number; angle: number }[] {
   const out = [];

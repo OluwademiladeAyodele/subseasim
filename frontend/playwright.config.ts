@@ -11,7 +11,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   use: { baseURL: "http://127.0.0.1:5173", viewport: { width: 1600, height: 960 } },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 960 } } }],
+  // PW_CHANNEL=msedge (or chrome) runs the suite on an installed browser instead
+  // of a downloaded Playwright build.
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 960 }, channel: process.env.PW_CHANNEL } }],
   webServer: [
     {
       command: `"${PY}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000`,

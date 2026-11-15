@@ -1,29 +1,52 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 
-/* Industrial dark engineering theme. State colours are centralised here and
-   in src/lib/stateColors.ts so the schematic, tables and legend agree. */
+/*
+ * SubseaSim design system (Release 2 "Workstation").
+ *
+ * Light, natural surfaces; slate text; deep-navy structure (sidebar) with an
+ * electric-cyan highlight (sharp-contrast pair). Status colours are the
+ * single source of truth here and in src/lib/stateColors.ts.
+ * Token NAMES are kept from Release 1 so every component re-themes.
+ */
 @theme {
-  --color-bg: #070b10;
-  --color-panel: #0d141c;
-  --color-panel-2: #121b26;
-  --color-panel-3: #182331;
-  --color-line: #223142;
-  --color-line-strong: #2f4357;
-  --color-fg: #d6dee8;
-  --color-muted: #7d8da1;
-  --color-dim: #56667a;
-  --color-accent: #38bdf8;
-  --color-ok: #22c55e;
-  --color-bad: #ef4444;
-  --color-warn: #f59e0b;
-  --color-fault: #d946ef;
-  --color-info: #60a5fa;
-  --color-flow: #22d3ee;
-  --color-static: #5b6b80;
-  --color-trapped: #a78bfa;
+  /* surfaces */
+  --color-bg: #f4f6f9;
+  --color-panel: #ffffff;
+  --color-panel-2: #f8fafc;
+  --color-panel-3: #eef2f6;
+  --color-line: #e3e8ef;
+  --color-line-strong: #cbd5e1;
 
-  --font-sans: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  /* text */
+  --color-fg: #0f172a;
+  --color-muted: #475569;
+  --color-dim: #64748b;
+
+  /* brand */
+  --color-navy: #0b1d4a;
+  --color-navy-2: #12285f;
+  --color-cyan: #22d3ee;
+  --color-accent: #0369a1;
+
+  /* status */
+  --color-ok: #15803d;
+  --color-bad: #b91c1c;
+  --color-warn: #b45309;
+  --color-fault: #a21caf;
+  --color-info: #1d4ed8;
+  --color-flow: #0891b2;
+  --color-static: #94a3b8;
+  --color-trapped: #7c3aed;
+
+  --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-float: 0 12px 32px -8px rgb(15 23 42 / 0.18), 0 2px 6px rgb(15 23 42 / 0.06);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
 }
 
 html,
@@ -32,25 +55,91 @@ body,
   height: 100%;
 }
 
+html {
+  color-scheme: light;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss01"; /* Inter: single-storey a, open digits */
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
+/* Numbers: tabular mono so live values do not jitter as they change */
 .num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "zero" 0;
 }
 
-/* thin industrial scrollbars */
+/* Type scale (size-specific tracking & leading) */
+.t-display {
+  font-size: 2rem;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+.t-title {
+  font-size: 1.375rem;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  font-weight: 650;
+}
+.t-heading {
+  font-size: 0.9375rem;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  font-weight: 600;
+}
+.t-eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+/* thin scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-line-strong) transparent;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
+/* Focus that is visible but calm */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------- material */
+.glass {
+  background: rgb(255 255 255 / 0.78);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: #ffffff;
+    backdrop-filter: none;
+  }
+}
+
+/* Press feedback on pointer-down (instant, compositor-only) */
+.pressable {
+  transition: transform 120ms var(--ease-out), background-color 150ms, box-shadow 150ms, border-color 150ms, color 150ms;
+}
+.pressable:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ---------------------------------------------------------------- motion */
 @keyframes blink {
   50% {
     opacity: 0.35;
@@ -58,4 +147,141 @@ body {
 }
 .moving-blink {
   animation: blink 1s steps(2, start) infinite;
+}
+
+/* Flow dashes: speed set per pipe from the BACKEND velocity (visual only). */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+.flow-dash {
+  animation-name: flow-dash;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes leak-pulse {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.leak-pulse {
+  animation: leak-pulse 1.4s ease-out infinite;
+}
+
+@keyframes halo {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+.halo {
+  animation: halo 1.6s ease-in-out infinite;
+}
+
+@keyframes live-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: live-dot 1.4s ease-in-out infinite;
+}
+
+/* Page entrance: a short rise + fade, anchored (not a slide across the screen) */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-in {
+  animation: page-in 260ms var(--ease-out) both;
+}
+
+/* Inspector sheet: enters and exits along the same path (from the right) */
+.sheet {
+  transition:
+    transform 320ms var(--ease-out),
+    opacity 220ms var(--ease-out);
+}
+.sheet[data-open="false"] {
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet[data-open="true"] {
+  transform: none;
+  opacity: 1;
+}
+
+/* Command palette: materialises from slightly above, scaled */
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.palette-in {
+  animation: palette-in 200ms var(--ease-out) both;
+  transform-origin: top center;
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+.scrim-in {
+  animation: scrim-in 200ms var(--ease-out) both;
+}
+
+/* Value flash when a reading changes noticeably (status feedback, subtle) */
+@keyframes value-tick {
+  0% {
+    background-color: color-mix(in srgb, var(--color-cyan) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Organic accent shape (the 20 % of "tactile" in the 80/20 rule) */
+.blob {
+  border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash,
+  .leak-pulse,
+  .halo,
+  .live-dot,
+  .moving-blink,
+  .page-in,
+  .palette-in {
+    animation: none;
+  }
+  .sheet {
+    transition: opacity 180ms ease;
+  }
+  .sheet[data-open="false"] {
+    transform: none;
+  }
+  .pressable:active:not(:disabled) {
+    transform: none;
+  }
 }
