@@ -331,6 +331,25 @@ class PumpConfig(_Strict):
     max_discharge_pressure_bara: Annotated[float, Field(gt=1, lt=2000)] = 690.0
 
 
+class ChemicalRouteConfig(_Strict):
+    """Additional injection route from the same chemical pump into the
+    PRODUCTION path (e.g. methanol injection valves upstream and downstream
+    of the production wing valve). Chemical carried by a route is tracked by
+    the production transport model exactly like the main injection point."""
+
+    id: str
+    name: str
+    #: Subsystem boundary node at the subsea distribution unit (same pump).
+    supply_node: str
+    #: Isolation valve tag of the route.
+    valve: str
+    #: Non-return valve tag; it must discharge into ``injection_node``.
+    check_valve: str
+    #: Production-path node the route injects into.
+    injection_node: str
+    flow_transmitter: str | None = None
+
+
 class ChemicalConfig(_Strict):
     id: str
     name: str
@@ -350,6 +369,8 @@ class ChemicalConfig(_Strict):
     annulus_valve: str | None = None
     annulus_check_valve: str | None = None
     annulus_flow_transmitter: str | None = None
+    #: Further injection routes into the production path (same pump).
+    routes: list[ChemicalRouteConfig] = Field(default_factory=list)
     pump: PumpConfig
     #: Temperature of the chemical as it enters the production stream.
     injection_temperature_c: float = 4.0
@@ -407,6 +428,76 @@ class DynamicsConfig(_Strict):
     default_response: dict[str, InstrumentResponseConfig] = Field(default_factory=dict)
 
 
+class TagAliasConfig(_Strict):
+    """Display tag shown on the workstation for an engineering tag. The
+    engineering tag stays the stable identifier used by the model, the API,
+    tests and training exercises; the alias reproduces the tag numbering of
+    a reference control-system page."""
+
+    tag: str
+    #: verified    - read confidently from the reference
+    #: uncertain   - partly legible on the reference; check against the P&ID
+    #: placeholder - not legible / not shown with a tag; editable placeholder
+    #: addition    - SubseaSim component that is NOT on the reference page
+    status: Literal["verified", "uncertain", "placeholder", "addition"] = "verified"
+    note: str = ""
+
+
+class HydraulicSupplyConfig(_Strict):
+    """Hydraulic power supply from the topside HPU through the umbilical
+    (e.g. LP for tree valves, HP for the SCSSV)."""
+
+    id: str
+    name: str
+    #: Supply pressure transmitter tag (engineering tag).
+    tag: str
+    pressure_bara: Annotated[float, Field(gt=1, lt=1500)]
+    #: Below this header pressure the actuators it serves can no longer be
+    #: held open: fail-safe valves close [bara].
+    minimum_operating_pressure_bara: Annotated[float, Field(gt=1, lt=1500)]
+    available: bool = True
+
+
+class HydraulicHeaderConfig(_Strict):
+    """Hydraulic header inside a subsea control module (SCM), fed from one
+    supply through a selector valve."""
+
+    id: str
+    name: str
+    #: Header pressure transmitter tag (engineering tag).
+    tag: str
+    supply: str
+    scm: str = ""
+    #: First-order charge time constant with the selector valve open [s].
+    charge_time_constant_s: Positive = 15.0
+    #: First-order bleed-down time constant when isolated from the supply
+    #: (pilot consumption and leakage to return) [s].
+    bleed_time_constant_s: Positive = 900.0
+
+
+class SelectorValveConfig(_Strict):
+    tag: str
+    name: str
+    header: str
+    stroke_time_s: Positive = 4.0
+    initial_open: bool = True
+
+
+class ControlHydraulicsConfig(_Strict):
+    """Simplified subsea control hydraulics: supplies -> selector valves ->
+    SCM headers -> valve actuators. Lumped first-order header pressures; no
+    individual actuator volumes, pilot valves or umbilical transients."""
+
+    supplies: list[HydraulicSupplyConfig]
+    headers: list[HydraulicHeaderConfig]
+    selector_valves: list[SelectorValveConfig]
+    #: Valve tag -> supply id whose headers power its actuator.
+    valve_supply: dict[str, str] = Field(default_factory=dict)
+    #: Valves that close (spring return) when their supply is lost; the
+    #: others (e.g. stepping-actuator chokes, metering valves) fail as-is.
+    fail_safe_close: list[str] = Field(default_factory=list)
+
+
 class ScenarioConfig(_Strict):
     id: str
     name: str
@@ -429,3 +520,10 @@ class ScenarioConfig(_Strict):
     #: Briefing notes shown to the intern (operation to try, what to
     #: watch). Text only; every response is calculated by the model.
     briefing: list[str] = Field(default_factory=list)
+    #: Engineering tag -> display tag (reference HMI numbering).
+    tag_aliases: dict[str, TagAliasConfig] = Field(default_factory=dict)
+    #: Subsea control hydraulics (selector valves, SCM headers, fail-safe).
+    control_hydraulics: ControlHydraulicsConfig | None = None
+    #: Id of a separate engineering-workstation schematic layout
+    #: (``app/scenarios/layouts/<id>.json``). Positions only - no physics.
+    schematic: str | None = None

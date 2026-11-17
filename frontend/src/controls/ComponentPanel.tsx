@@ -15,6 +15,7 @@ import {
   pressureFromPa,
   unitLabel,
 } from "@/lib/units";
+import { ALIAS_STATUS_LABEL, aliasOf } from "@/lib/tags";
 import type { Selection } from "@/schematic/TreeSchematic";
 import type {
   CheckValveSnapshot,
@@ -41,6 +42,27 @@ function Row({ label, value, unit, mono = true }: { label: string; value: React.
         {value}
         {unit && <span className="ml-1 text-[11.5px] text-muted">{unit}</span>}
       </span>
+    </div>
+  );
+}
+
+/** Display (reference) tag with the engineering tag and the alias provenance. */
+function TagHeading({ state, tag }: { state: SimulationState; tag: string }) {
+  const a = aliasOf(state, tag);
+  if (!a || a.tag === tag) {
+    return (
+      <div className="num text-base font-bold text-fg" data-testid="tag-heading">
+        {tag}
+        {a?.status === "addition" && <div className="text-[11px] font-normal text-dim">{ALIAS_STATUS_LABEL.addition}</div>}
+      </div>
+    );
+  }
+  return (
+    <div data-testid="tag-heading">
+      <div className="num text-base font-bold text-fg">
+        {a.tag} <span className="text-[12px] font-medium text-dim">· {tag}</span>
+      </div>
+      <div className="text-[11px] text-dim" title={a.note}>{ALIAS_STATUS_LABEL[a.status]}{a.note ? ` — ${a.note}` : ""}</div>
     </div>
   );
 }
@@ -82,6 +104,7 @@ export function ComponentPanel({ state, selection, prefs, onCommand }: Props) {
     const inst = state.instruments.find((i) => i.tag === selection.tag);
     return inst ? <InstrumentDetail inst={inst} state={state} prefs={prefs} /> : null;
   }
+  if (selection.type !== "element") return null;
   const el = state.elements.find((e) => e.id === selection.id);
   if (!el) return null;
   switch (el.kind) {
@@ -125,7 +148,7 @@ function RestrictionDetail({ v, state, prefs, onCommand }: { v: RestrictionSnaps
     <div className="p-3" data-testid="component-panel">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="num text-base font-bold text-fg">{v.tag}</div>
+          <TagHeading state={state} tag={v.tag} />
           <div className="text-muted">{SUBTYPE[v.subtype] ?? v.name}</div>
         </div>
         <Badge tone={tone} data-testid="valve-state">{VALVE_LABEL[vis]}</Badge>
@@ -287,7 +310,7 @@ function CheckValveDetail({ v, state, prefs }: { v: CheckValveSnapshot; state: S
     <div className="p-3" data-testid="component-panel">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="num text-base font-bold text-fg">{v.tag}</div>
+          <TagHeading state={state} tag={v.tag} />
           <div className="text-muted">{v.name}</div>
         </div>
         <Badge tone={v.state === "flowing" ? "ok" : "neutral"}>{v.state === "flowing" ? "OPEN (flowing)" : v.state === "closed" ? "CLOSED" : "NO FLOW"}</Badge>
@@ -340,7 +363,7 @@ function InstrumentDetail({ inst, state, prefs }: { inst: InstrumentSnapshot; st
     <div className="p-3" data-testid="component-panel">
       <div className="flex items-start justify-between">
         <div>
-          <div className="num text-base font-bold">{inst.tag}</div>
+          <TagHeading state={state} tag={inst.tag} />
           <div className="text-muted">{inst.description}</div>
         </div>
         <Badge tone={inst.status === "GOOD" ? "ok" : inst.status.startsWith("OUT") ? "warn" : "fault"}>{inst.status.replace(/_/g, " ")}</Badge>

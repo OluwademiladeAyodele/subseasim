@@ -80,3 +80,11 @@ class TrainingStartRequest(_Req):
 class TrainingAnswerRequest(_Req):
     step_id: str
     choice: str
+
+
+class SelectorCommandRequest(_Req):
+    command: Literal["open", "close"]
+
+
+class SupplyRequest(_Req):
+    available: bool

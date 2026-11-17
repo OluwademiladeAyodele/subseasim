@@ -38,7 +38,7 @@ export interface RouteDef {
 }
 
 export const ROUTES: RouteDef[] = [
-  { id: "overview", label: "Process overview", description: "Live schematic, key measurements and activity", icon: LayoutDashboard, group: "Operate", key: "1" },
+  { id: "overview", label: "Christmas tree", description: "Christmas tree workstation, full-system schematic, key measurements and activity", icon: LayoutDashboard, group: "Operate", key: "1" },
   { id: "valves", label: "Valves & actuators", description: "Operate tree, annulus and injection valves", icon: ToggleRight, group: "Operate", key: "2" },
   { id: "chemicals", label: "Chemicals", description: "Injection circuits, dosing and chemical transport", icon: Droplets, group: "Operate", key: "3" },
   { id: "integrity", label: "Integrity tests", description: "Stroke, pressure-hold and inflow tests", icon: ShieldCheck, group: "Operate", key: "4" },

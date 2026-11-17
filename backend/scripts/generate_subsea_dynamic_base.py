@@ -15,7 +15,6 @@ the bottom left.
 import json
 import sys
 
-out = sys.argv[1] if len(sys.argv) > 1 else "app/scenarios/data/subsea_dynamic_base.json"
 
 nodes = [
     {"id": "RES", "name": "Reservoir (drainage boundary, at datum)", "elevation_m": -3700},
@@ -324,6 +323,8 @@ scenario = {
     ],
     "layout": layout,
 }
-with open(out, "w", encoding="utf-8") as f:
-    json.dump(scenario, f, indent=2)
-print("written", out)
+if __name__ == "__main__":
+    out = sys.argv[1] if len(sys.argv) > 1 else "app/scenarios/data/subsea_dynamic_base.json"
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(scenario, f, indent=2)
+    print("written", out)

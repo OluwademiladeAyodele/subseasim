@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.core import units as u
-from app.models.scenario import ChemicalConfig, ScenarioConfig
+from app.models.scenario import ChemicalConfig, ChemicalRouteConfig, ScenarioConfig
 from app.simulation.build import BuiltSystem
 from app.simulation.components.elements import CheckValveElement, Element, PipeElement, RestrictionElement
 from app.simulation.dynamic.builder import PRODUCTION, DynamicLayout, build_dynamic_layout
@@ -41,6 +41,18 @@ from app.simulation.instruments.instruments import Instrument, Reading, classify
 NO_FLOW_M3S = 1e-8
 #: Injection below this is reported as "no injection" (3.6 mL/h).
 INJECTION_MIN_M3S = 1e-9
+
+
+@dataclass
+class InjRoute:
+    """Additional injection route of a circuit into the production path."""
+
+    cfg: ChemicalRouteConfig
+    supply_idx: int
+    link: int
+    inj_node: str
+    status: str = "unknown"
+    cum_m3: float = 0.0
 
 
 @dataclass
@@ -63,6 +75,8 @@ class ChemCircuit:
     ann_link: int | None = None
     ann_status: str = "none"
     cum_to_annulus_m3: float = 0.0
+    # further routes into the production path (same pump)
+    routes: list[InjRoute] = field(default_factory=list)
 
     @property
     def p_supply(self) -> float:
@@ -138,6 +152,16 @@ class DynamicModel:
                 if self.net.nodes[self.net.links[a_link].dn].zone in (PRODUCTION, c.fluid):
                     raise ValueError(f"chemical {c.id}: the annulus check valve must discharge into an annulus-system node")
                 circuit.ann_supply_idx, circuit.ann_link = a_idx, a_link
+            for r in c.routes:
+                r_idx = self.layout.node_index[r.supply_node]
+                if not self.net.nodes[r_idx].fixed:
+                    raise ValueError(f"chemical {c.id} route {r.id}: supply node {r.supply_node} must be a subsystem boundary")
+                if r.injection_node not in topo.nodes:
+                    raise ValueError(f"chemical {c.id} route {r.id}: injection node {r.injection_node} must be on the production path")
+                r_link = self.layout.element_link[self._element_by_tag(r.check_valve).id]
+                if self.net.links[r_link].dn != self.layout.node_index[r.injection_node]:
+                    raise ValueError(f"chemical {c.id} route {r.id}: check valve {r.check_valve} must discharge into {r.injection_node}")
+                circuit.routes.append(InjRoute(r, r_idx, r_link, r.injection_node))
             self.circuits.append(circuit)
         # annulus lumped temperature
         self.annulus_nodes: list[int] = []
@@ -264,6 +288,8 @@ class DynamicModel:
         for c in self.circuits:
             c.status = self._circuit_status(c)
             c.ann_status = self._annulus_route_status(c)
+            for r in c.routes:
+                r.status = self._route_status(c, r)
         self._init_instruments()
 
     # -------------------------------------------------------------- control
@@ -273,6 +299,8 @@ class DynamicModel:
             net.p_fixed[c.supply_idx] = c.p_supply
             if c.ann_supply_idx is not None:
                 net.p_fixed[c.ann_supply_idx] = c.p_supply  # same pump
+            for r in c.routes:
+                net.p_fixed[r.supply_idx] = c.p_supply  # same pump
         res_i = self.layout.node_index[self.topology.reservoir_node]
         bnd_i = self.layout.node_index[self.topology.boundary_node]
         net.p_fixed[res_i] = self.ipr.p_res
@@ -312,15 +340,25 @@ class DynamicModel:
                 net.gravity[li] *= fluid.rho / old.rho
 
     # ------------------------------------------------------------------ step
+    def _injection_points(self, c: ChemCircuit) -> list[tuple[str, float]]:
+        """(production node, injected flow [m3/s]) for every route of a circuit."""
+        pts = [(c.inj_node, float(self.net.Q[c.inj_link]))]
+        pts += [(r.inj_node, float(self.net.Q[r.link])) for r in c.routes]
+        return pts
+
+    def total_injection(self, c: ChemCircuit) -> float:
+        """Total flow of the chemical into the production path [m3/s]."""
+        return sum(max(q, 0.0) for _, q in self._injection_points(c))
+
     def _injections(self, F: np.ndarray) -> list[tuple[int, int, float, float, float]]:
         out = []
         for c in self.circuits:
-            q = float(self.net.Q[c.inj_link])
-            if q <= 0:
-                continue
-            lk = self.grid.node_lookup[c.inj_node]
-            ci = lk.cell if lk.cell is not None else self.grid.injection_cell(lk.face, F)  # type: ignore[arg-type]
-            out.append((c.k, ci, q, c.t_inj, c.rho * c.cp))
+            for node, q in self._injection_points(c):
+                if q <= 0:
+                    continue
+                lk = self.grid.node_lookup[node]
+                ci = lk.cell if lk.cell is not None else self.grid.injection_cell(lk.face, F)  # type: ignore[arg-type]
+                out.append((c.k, ci, q, c.t_inj, c.rho * c.cp))
         return out
 
     def injections_at_nodes(self) -> dict[str, list[tuple[int, float]]]:
@@ -329,9 +367,9 @@ class DynamicModel:
             return cached
         out: dict[str, list[tuple[int, float]]] = {}
         for c in self.circuits:
-            q = float(self.net.Q[c.inj_link])
-            if q > 0:
-                out.setdefault(c.inj_node, []).append((c.k, q))
+            for node, q in self._injection_points(c):
+                if q > 0:
+                    out.setdefault(node, []).append((c.k, q))
         self._inj_at = out
         return out
 
@@ -379,6 +417,8 @@ class DynamicModel:
             c.cum_injected_m3 += max(float(net.Q[c.inj_link]), 0.0) * dt
             if c.ann_link is not None:
                 c.cum_to_annulus_m3 += max(float(net.Q[c.ann_link]), 0.0) * dt
+            for r in c.routes:
+                r.cum_m3 += max(float(net.Q[r.link]), 0.0) * dt
         self.grid.step(dt, F, dT, inj, self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
         self._update_node_temperatures(dt)
         self.max_rate_pa_s = float(np.max(np.abs(net.P - P_old)[~net.fixed])) / dt if net.n else 0.0
@@ -570,6 +610,15 @@ class DynamicModel:
             return "pump_stopped"
         return "isolated" if not miv_open else "insufficient_differential"
 
+    def _route_status(self, c: ChemCircuit, r: InjRoute) -> str:
+        v = self._element_by_tag(r.cfg.valve)
+        v_open = not (isinstance(v, RestrictionElement) and v.actuator.position_pct <= 0)
+        if float(self.net.Q[r.link]) > INJECTION_MIN_M3S and v_open:
+            return "injecting"
+        if not c.running:
+            return "pump_stopped"
+        return "isolated" if not v_open else "insufficient_differential"
+
     def update_circuit_status(self) -> list[tuple[ChemCircuit, str, str, str]]:
         """Status transitions as (circuit, old, new, route) with route
         "production" (main injection point) or "annulus" (service line)."""
@@ -584,6 +633,11 @@ class DynamicModel:
                 if a != c.ann_status:
                     changes.append((c, c.ann_status, a, "annulus"))
                     c.ann_status = a
+            for r in c.routes:
+                rs = self._route_status(c, r)
+                if rs != r.status:
+                    changes.append((c, r.status, rs, f"route:{r.cfg.id}"))
+                    r.status = rs
         return changes
 
     def chemical_front(self, c: ChemCircuit) -> dict:

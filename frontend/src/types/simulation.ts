@@ -164,6 +164,10 @@ export interface ChemicalSnapshot {
     cumulative_m3: number;
     junction_pressure_pa: number;
   } | null;
+  /** further injection routes of this circuit into the production path */
+  routes?: ChemicalRoute[];
+  /** total flow into the production path over all routes [m3/s] */
+  total_injection_m3s?: number;
   in_production_line_m3: number;
   exported_m3: number;
   front_distance_m: number;
@@ -172,6 +176,90 @@ export interface ChemicalSnapshot {
   display_unit: "ppm" | "vol%";
   target_min: number | null;
   target_max: number | null;
+}
+
+export interface ChemicalRoute {
+  id: string;
+  name: string;
+  valve: string;
+  check_valve: string;
+  flow_transmitter: string | null;
+  injection_node: string;
+  injection_node_name: string;
+  status: string;
+  flow_m3s: number;
+  cumulative_m3: number;
+}
+
+export interface TagAlias {
+  tag: string;
+  status: "verified" | "uncertain" | "placeholder" | "addition";
+  note: string;
+}
+
+export interface HydraulicSupply {
+  id: string;
+  name: string;
+  tag: string;
+  available: boolean;
+  pressure_pa: number;
+  nominal_pressure_pa: number;
+  minimum_operating_pressure_pa: number;
+  actuator_pressure_pa: number;
+  ok: boolean;
+  valves: string[];
+  fail_safe_close: string[];
+}
+
+export interface ControlHydraulics {
+  supplies: HydraulicSupply[];
+  headers: { id: string; name: string; tag: string; supply: string; scm: string; pressure_pa: number }[];
+  selector_valves: { tag: string; name: string; header: string; opening_pct: number; commanded_pct: number; moving: boolean; stroke_time_s: number }[];
+}
+
+export type SchPoint = [number, number];
+
+export interface SchComponent {
+  id: string;
+  type: string;
+  model: string | null;
+  models: string[];
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  ports: Record<string, SchPoint>;
+  flow_path: string | null;
+  tap: SchPoint | null;
+  label: { dx: number; dy: number; anchor: "start" | "middle" | "end" } | null;
+  group: string | null;
+  note: string;
+}
+
+export interface SchLine {
+  id: string;
+  cls: "production" | "annulus" | "service" | "chemical" | "methanol" | "downhole_chemical" | "hydraulic";
+  points: SchPoint[];
+  elements: string[];
+  chemical: string | null;
+  model?: string | null;
+  from_ref: string | null;
+  to_ref: string | null;
+}
+
+export interface SchematicLayout {
+  id: string;
+  title: string;
+  subtitle: string;
+  width: number;
+  height: number;
+  reference: { source: string; method: string; photo_origin_px: SchPoint; scale: number; notes: string[] };
+  groups: { id: string; label: string; x: number; y: number; w: number; h: number; frame: boolean }[];
+  lines: SchLine[];
+  components: SchComponent[];
+  connectors: { id: string; x: number; y: number; direction: "left" | "right" | "up" | "down"; label: string; model: string | null; label_side?: "left" | "right" }[];
+  annotations: { type: string; x: number; y: number; w?: number; h?: number; text?: string; label?: string }[];
 }
 
 export type IntegrityType = "pressure_hold" | "inflow" | "stroke";
@@ -272,6 +360,11 @@ export interface SimulationState {
   briefing?: string[];
   steady_reference?: { status: string; q_m3s: number | null; node_pressure_pa: Record<string, number | null>; note: string };
   chemicals?: ChemicalSnapshot[];
+  /** engineering tag -> display tag of the reference HMI (static) */
+  tag_aliases?: Record<string, TagAlias>;
+  /** engineering-workstation schematic layout (static), null if none */
+  schematic?: SchematicLayout | null;
+  control_hydraulics?: ControlHydraulics | null;
   chemical_config?: { id: string; name: string; color: string; display_unit: "ppm" | "vol%"; target_min: number | null; target_max: number | null }[];
   integrity?: { tests: IntegrityTestSnapshot[]; test_points: { transmitter: string; node: string; description: string }[] };
   integrity_presets?: IntegrityPreset[];

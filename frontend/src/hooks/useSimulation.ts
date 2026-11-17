@@ -80,6 +80,8 @@ export function useSimulation(): Simulation {
             training_rules: p.state.training_rules ?? prev.training_rules,
             integrity_presets: p.state.integrity_presets ?? prev.integrity_presets,
             chemical_config: p.state.chemical_config ?? prev.chemical_config,
+            tag_aliases: p.state.tag_aliases ?? prev.tag_aliases,
+            schematic: p.state.schematic !== undefined ? p.state.schematic : prev.schematic,
           },
     );
     if (p.state.layout) setLayout(p.state.layout);

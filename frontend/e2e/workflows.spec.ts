@@ -85,7 +85,7 @@ test("reservoir pressure change propagates over simulated time", async ({ page }
   await nav(page, "Conditions");
   await page.getByLabel("Reservoir pressure").fill("420");
   await page.getByRole("button", { name: "Apply conditions" }).click();
-  await nav(page, "Process overview");
+  await nav(page, "Christmas tree");
   // the steady-state target moves at once; the actual flow follows as the
   // pressure change diffuses through the reservoir (simulated hours)
   const target = async () => parseFloat((await page.getByTestId("kpi-flow").innerText()).match(/heading to ([\d.]+)/)?.[1] ?? "0");
@@ -137,4 +137,25 @@ test("trends can be expanded, stepped through and closed", async ({ page }) => {
   await expect(focus).toBeHidden();
   await page.getByTestId("chart-temperature").locator(".recharts-surface").dblclick();
   await expect(page.getByTestId("trend-focus").getByRole("heading", { level: 2 })).toContainText("Temperature");
+});
+
+test("Christmas tree workstation: reference layout, valve and selector-valve operation", async ({ page }) => {
+  const xt = page.getByTestId("xt-schematic");
+  await expect(xt).toBeVisible();
+  await expect(xt.getByText("PMV3004")).toBeVisible();
+  await startFast(page, "60");
+  // operate the wing valve from the schematic: the tree cavity transmitter responds
+  const cavity = async () => parseFloat(((await page.getByTestId("inst-PT-104").textContent()) ?? "").replace(/[^\d.]/g, ""));
+  const p0 = await cavity();
+  await page.getByTestId("valve-PWV-101").click();
+  await page.getByTestId("component-panel").getByRole("button", { name: /^close$/i }).click();
+  await expect.poll(cavity, { timeout: 30_000 }).toBeGreaterThan(p0 + 5);
+  // selector valve: isolate SCM A from the LP supply; its header bleeds down
+  await page.getByTestId("selector-SEL-LP-A").click();
+  await expect(page.getByTestId("hydraulics-panel")).toBeVisible();
+  await page.getByRole("button", { name: "SEL-LP-A close" }).click();
+  await expect(page.getByTestId("selector-state")).toHaveText(/CLOSED/, { timeout: 20_000 });
+  const lpA = async () => parseFloat((await page.getByTestId("hyd-LP-A").locator("text").nth(1).textContent()) ?? "NaN");
+  await expect.poll(lpA, { timeout: 30_000 }).toBeLessThan(200);
+  await page.keyboard.press("Escape");
 });

@@ -1,4 +1,5 @@
 import { Stat } from "@/components/ui/primitives";
+import { displayTag } from "@/lib/tags";
 import { type DisplayPrefs, FLOW_LABEL, flowFromM3s, fmt, instrumentDisplay, paToBarDelta } from "@/lib/units";
 import type { InstrumentSnapshot, SimulationState } from "@/types/simulation";
 
@@ -65,7 +66,7 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
             key={i.tag}
             label={
               <span>
-                <span className="num font-semibold text-fg">{i.tag}</span> · {i.description}
+                <span className="num font-semibold text-fg">{displayTag(state, i.tag)}</span> · {i.description}
               </span>
             }
             value={i.value_si === null ? i.status.replace(/_/g, " ").toLowerCase() : fmt(d.value, d.digits)}

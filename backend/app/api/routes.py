@@ -12,6 +12,8 @@ from app.api.schemas import (
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    SelectorCommandRequest,
+    SupplyRequest,
     LoadScenarioRequest,
     SpeedRequest,
     TrainingAnswerRequest,
@@ -183,9 +185,41 @@ async def load_scenario(sid: str, req: LoadScenarioRequest) -> dict:
     return await _reinit(s)
 
 
+def _resolve_tag(s: Session, tag: str) -> str:
+    """Accept the engineering tag or its display alias (reference HMI tag)."""
+    if tag in s.engine.restrictions:
+        return tag
+    for eng, alias in s.engine.scenario.tag_aliases.items():
+        if alias.tag == tag:
+            return eng
+    return tag
+
+
+@router.post("/sessions/{sid}/hydraulics/selectors/{tag}")
+async def selector_command(sid: str, tag: str, req: SelectorCommandRequest) -> dict:
+    s = _session(sid)
+    tag = _resolve_tag(s, tag)
+    try:
+        s.engine.command_selector(tag, req.command)
+    except CommandRejected as exc:
+        raise HTTPException(404 if "unknown" in str(exc) else 409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/hydraulics/supplies/{supply_id}")
+async def hydraulic_supply(sid: str, supply_id: str, req: SupplyRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_hydraulic_supply(supply_id, req.available)
+    except CommandRejected as exc:
+        raise HTTPException(404, str(exc)) from None
+    return await _after_change(s)
+
+
 @router.post("/sessions/{sid}/valves/{tag}")
 async def valve_command(sid: str, tag: str, req: ValveCommandRequest) -> dict:
     s = _session(sid)
+    tag = _resolve_tag(s, tag)
     if tag not in s.engine.restrictions:
         raise HTTPException(404, f"valve {tag!r} not found")
     try:

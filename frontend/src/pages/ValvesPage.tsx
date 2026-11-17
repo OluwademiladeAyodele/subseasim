@@ -5,6 +5,7 @@ import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Panel } from "@/components/ui/primitives";
 import { valveVisual, VALVE_LABEL } from "@/lib/stateColors";
 import { fmt, formatDuration, paToBarDelta } from "@/lib/units";
+import { displayTag } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { RestrictionSnapshot } from "@/types/simulation";
 
@@ -26,7 +27,7 @@ const GROUP_OF: Record<string, "production" | "annulus" | "chemical"> = {
 };
 
 function ValveCard({ v }: { v: RestrictionSnapshot }) {
-  const { actions, selectTag, selection } = useWorkstation();
+  const { actions, selectTag, selection, state } = useWorkstation();
   const vis = valveVisual(v);
   const selected = selection?.type === "element" && selection.id === v.id;
   return (
@@ -39,7 +40,7 @@ function ValveCard({ v }: { v: RestrictionSnapshot }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="num text-[15px] font-semibold">{v.tag}</div>
+          <div className="num text-[15px] font-semibold" title={v.tag}>{displayTag(state, v.tag)}</div>
           <div className="truncate text-[12.5px] text-dim">{v.name}</div>
         </div>
         <Badge tone={VIS_TONE[vis]}>{VALVE_LABEL[vis].toLowerCase()}</Badge>

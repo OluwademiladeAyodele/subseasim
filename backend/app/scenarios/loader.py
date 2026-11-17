@@ -76,3 +76,22 @@ def get_scenario(scenario_id: str) -> ScenarioConfig:
     if scenario_id not in cat:
         raise ScenarioNotFound(scenario_id)
     return cat[scenario_id].model_copy(deep=True)
+
+
+# ------------------------------------------------------------------ schematic
+LAYOUT_DIR = Path(__file__).resolve().parent / "layouts"
+
+
+@lru_cache(maxsize=8)
+def _schematic(layout_id: str) -> dict:
+    from app.models.schematic import SchematicLayout
+
+    path = LAYOUT_DIR / f"{layout_id}.json"
+    if not path.is_file():
+        raise ScenarioNotFound(f"schematic layout {layout_id!r}")
+    return SchematicLayout.model_validate_json(path.read_text(encoding="utf-8")).model_dump()
+
+
+def get_schematic(layout_id: str) -> dict:
+    """Validated workstation schematic layout (positions only)."""
+    return copy.deepcopy(_schematic(layout_id))

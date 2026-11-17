@@ -34,6 +34,8 @@ from app.core import units as u
 from app.core.config import Settings, settings as default_settings
 from app.models.scenario import ScenarioConfig
 from app.simulation.build import build_fluid, build_system
+from app.scenarios.loader import get_schematic
+from app.simulation.control.hydraulics import ControlHydraulics
 from app.simulation.components.elements import (
     CheckValveElement,
     ChokeElement,
@@ -137,6 +139,7 @@ class SimulationEngine:
         self._settle_since: float | None = None
         self.achieved_speed: float | None = None
         self.hyd: HydraulicResult | None = None
+        self.ctrl = ControlHydraulics(scenario.control_hydraulics) if scenario.control_hydraulics else None
         self._solve()
         # Initial condition: thermal steady state for the initial configuration.
         self.thermal.step(self.hyd.q if self.hyd.ok else 0.0, self.hyd.element_dp, None)
@@ -201,6 +204,7 @@ class SimulationEngine:
             self._advance_dynamic(dt_total)
             return
         for dt in substeps(dt_total, self.settings.max_substep_s):
+            self._hydraulics_step(dt)
             moving = [r for r in self.restrictions.values() if r.actuator.is_moving]
             for r in moving:
                 r.actuator.step(dt)
@@ -230,7 +234,65 @@ class SimulationEngine:
         self._measure()
         self._check_outcomes()
 
+    def _hydraulics_step(self, dt: float) -> None:
+        """Control hydraulics: header pressures, then fail-safe closure of
+        the valves whose supply has fallen below its operating minimum."""
+        if self.ctrl is None:
+            return
+        lost, restored = self.ctrl.step(dt)
+        for sid in lost:
+            sup = self.ctrl.supplies[sid]
+            p = u.pa_to_bara(self.ctrl.supply_pressure_at_actuators(sid))
+            closing = []
+            for tag in self.ctrl.fail_safe_valves(sid):
+                el = self.restrictions.get(tag)
+                if el is not None and el.actuator.commanded_pct > 0:
+                    el.actuator.command(0.0)
+                    closing.append(tag)
+                    self._pending = [x for x in self._pending if x.tag != tag]
+                    self._pending.append(_PendingOutcome(f"{tag} FAIL-SAFE CLOSE", tag, 0.0, self._key_values()))
+            self.events.add(
+                self.time_s, "alarm",
+                f"LOSS OF {sup.name.upper()} HYDRAULIC SUPPLY at the SCM ({p:.0f} bara < {u.pa_to_bara(sup.p_min):.0f} bara minimum). "
+                + (f"Fail-safe valves closing: {', '.join(closing)}." if closing else "No fail-safe valve was open."),
+                severity="error",
+                detail="Spring-return actuators close when the control fluid pressure can no longer hold them open. "
+                       "Fail-as-is actuators (choke, metering valves) stay where they are.",
+            )
+            if closing:
+                self._settle_pending = f"{sup.name} hydraulic supply lost"
+                self._settle_since = None
+        for sid in restored:
+            sup = self.ctrl.supplies[sid]
+            self.events.add(self.time_s, "operation",
+                            f"{sup.name} hydraulic supply restored at the SCM ({u.pa_to_bara(self.ctrl.supply_pressure_at_actuators(sid)):.0f} bara). "
+                            "Valves that closed fail-safe stay closed until commanded open.")
+
+    def command_selector(self, tag: str, command: str) -> None:
+        if self.ctrl is None or tag not in self.ctrl.selectors:
+            raise CommandRejected(f"unknown selector valve {tag!r}")
+        if command not in ("open", "close"):
+            raise CommandRejected("selector valve command must be 'open' or 'close'")
+        sel = self.ctrl.selectors[tag]
+        self.ctrl.command_selector(tag, command == "open")
+        h = self.ctrl.headers[sel.header]
+        note = "" if self.status == "running" else " - simulation not running: the valve will move when the simulation runs"
+        self.events.add(self.time_s, "operation",
+                        f"Selector valve {tag} {command.upper()} commanded ({h.name}, stroke ~{sel.stroke_time_s:g} s){note}", component=tag)
+
+    def set_hydraulic_supply(self, supply_id: str, available: bool) -> None:
+        if self.ctrl is None or supply_id not in self.ctrl.supplies:
+            raise CommandRejected(f"unknown hydraulic supply {supply_id!r}")
+        sup = self.ctrl.supplies[supply_id]
+        if sup.available == available:
+            return
+        self.ctrl.set_supply_available(supply_id, available)
+        self.events.add(self.time_s, "operation" if available else "alarm",
+                        f"{sup.name} hydraulic supply from the HPU {'RESTORED' if available else 'LOST (HPU trip / umbilical failure)'}",
+                        component=supply_id, severity="info" if available else "warning")
+
     def _dynamic_step(self, dt: float) -> None:
+        self._hydraulics_step(dt)
         moving = [r for r in self.restrictions.values() if r.actuator.is_moving]
         for r in moving:
             r.actuator.step(dt)
@@ -347,6 +409,12 @@ class SimulationEngine:
         if abs(target - act.commanded_pct) < 1e-9:
             self.events.add(self.time_s, "operation", f"{tag} {verb} commanded (already at commanded position {target:.1f} %)", component=tag)
             return
+
+        if self.ctrl is not None and target > act.commanded_pct:
+            ok, why = self.ctrl.can_open(tag)
+            if not ok:
+                self.events.add(self.time_s, "rejected", f"Command rejected: {tag} {why}", component=tag, severity="warning")
+                raise CommandRejected(f"{tag}: {why}")
 
         if (isinstance(el, ValveElement) and el.subtype != "injection_isolation"
                 and target > act.position_pct and act.position_pct == 0.0):
@@ -514,6 +582,19 @@ class SimulationEngine:
                 elif old == "injecting":
                     self.events.add(self.time_s, "chemical",
                                     f"{c.cfg.name} injection into the annulus service line stopped ({new.replace('_', ' ')})",
+                                    component=c.cfg.id)
+                continue
+            if route.startswith("route:"):
+                r = next(x for x in c.routes if x.cfg.id == route[6:])
+                qr = float(self.dyn.net.Q[r.link])  # type: ignore[union-attr]
+                where = self.topology.nodes[r.inj_node].name
+                if new == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection through {r.cfg.valve} STARTED: {qr * 3600 * 1000:.1f} L/h entering "
+                                    f"the production stream at {where}", component=c.cfg.id)
+                elif old == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection through {r.cfg.valve} stopped ({new.replace('_', ' ')})",
                                     component=c.cfg.id)
                 continue
             q = float(self.dyn.net.Q[c.inj_link])  # type: ignore[union-attr]
@@ -699,9 +780,12 @@ class SimulationEngine:
             "last_event_id": self.events.last_id,
             "last_sample_seq": self.history.last_seq,
             "briefing": self.scenario.briefing,
+            "control_hydraulics": self.ctrl.snapshot() if self.ctrl is not None else None,
         }
         if include_static:
             snap["layout"] = self.scenario.layout.model_dump()
+            snap["tag_aliases"] = {k: v.model_dump() for k, v in self.scenario.tag_aliases.items()}
+            snap["schematic"] = get_schematic(self.scenario.schematic) if self.scenario.schematic else None
             snap["training_rules"] = self.scenario.training_rules.model_dump()
             snap["integrity_presets"] = [p.model_dump() for p in self.scenario.integrity_tests]
             snap["chemical_config"] = [
@@ -855,7 +939,15 @@ class SimulationEngine:
                 "injection_point_pressure_pa": dyn.node_pressure(c.inj_node),
                 "isolation_valve": c.cfg.isolation_valve, "control_valve": c.cfg.control_valve, "check_valve": c.cfg.check_valve,
                 "pressure_transmitter": c.cfg.pressure_transmitter, "flow_transmitter": c.cfg.flow_transmitter,
-                "fully_mixed_concentration": qi / (q_prod) if q_prod > NO_FLOW_M3S and qi > 0 else 0.0,
+                "total_injection_m3s": dyn.total_injection(c),
+                "fully_mixed_concentration": (dyn.total_injection(c) / q_prod
+                                              if q_prod > NO_FLOW_M3S and dyn.total_injection(c) > 0 else 0.0),
+                "routes": [{
+                    "id": r.cfg.id, "name": r.cfg.name, "valve": r.cfg.valve, "check_valve": r.cfg.check_valve,
+                    "flow_transmitter": r.cfg.flow_transmitter, "injection_node": r.inj_node,
+                    "injection_node_name": self.topology.nodes[r.inj_node].name, "status": r.status,
+                    "flow_m3s": float(net.Q[r.link]), "cumulative_m3": r.cum_m3,
+                } for r in c.routes],
                 "cumulative_injected_m3": c.cum_injected_m3,
                 "annulus_route": None if c.ann_link is None else {
                     "valve": c.cfg.annulus_valve, "check_valve": c.cfg.annulus_check_valve,

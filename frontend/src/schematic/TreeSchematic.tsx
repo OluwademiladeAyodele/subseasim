@@ -25,7 +25,13 @@ import type {
 
 import { arrowPositions, pathD, pointAlong, subPath } from "./geometry";
 
-export type Selection = { type: "element"; id: string } | { type: "instrument"; tag: string } | null;
+export type Selection =
+  | { type: "element"; id: string }
+  | { type: "instrument"; tag: string }
+  | { type: "selector"; tag: string }
+  | { type: "chemical"; id: string }
+  | { type: "hydraulic"; id: string }
+  | null;
 
 interface Props {
   state: SimulationState;
