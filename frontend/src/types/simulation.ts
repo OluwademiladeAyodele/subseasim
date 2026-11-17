@@ -3,6 +3,9 @@
  * All physical values are SI: pressure Pa ABSOLUTE, differential Pa,
  * temperature K, flow m3/s. Conversion for display happens in lib/units.ts.
  */
+import type { ErosionMaterial, SandChokeInputs, SandChokeResults } from "./sand";
+
+export type { ErosionMaterial, SandChokeInputs, SandChokeResults } from "./sand";
 
 export type SimStatus = "ready" | "running" | "paused";
 export type SimMode = "steady" | "dynamic";
@@ -154,6 +157,20 @@ export interface ChemicalSnapshot {
   flow_transmitter: string | null;
   fully_mixed_concentration: number;
   cumulative_injected_m3: number;
+  /** optional second route into the annulus service line */
+  annulus_route?: {
+    valve: string;
+    check_valve: string;
+    flow_transmitter: string | null;
+    status: string;
+    flow_m3s: number;
+    cumulative_m3: number;
+    junction_pressure_pa: number;
+  } | null;
+  /** further injection routes of this circuit into the production path */
+  routes?: ChemicalRoute[];
+  /** total flow into the production path over all routes [m3/s] */
+  total_injection_m3s?: number;
   in_production_line_m3: number;
   exported_m3: number;
   front_distance_m: number;
@@ -162,6 +179,231 @@ export interface ChemicalSnapshot {
   display_unit: "ppm" | "vol%";
   target_min: number | null;
   target_max: number | null;
+}
+
+export interface ChemicalRoute {
+  id: string;
+  name: string;
+  valve: string;
+  check_valve: string;
+  flow_transmitter: string | null;
+  injection_node: string;
+  injection_node_name: string;
+  status: string;
+  flow_m3s: number;
+  cumulative_m3: number;
+}
+
+export interface TagAlias {
+  tag: string;
+  status: "verified" | "uncertain" | "placeholder" | "addition";
+  note: string;
+}
+
+export interface HydraulicSupply {
+  id: string;
+  name: string;
+  tag: string;
+  available: boolean;
+  pressure_pa: number;
+  nominal_pressure_pa: number;
+  minimum_operating_pressure_pa: number;
+  actuator_pressure_pa: number;
+  ok: boolean;
+  valves: string[];
+  fail_safe_close: string[];
+}
+
+export interface ControlHydraulics {
+  supplies: HydraulicSupply[];
+  headers: { id: string; name: string; tag: string; supply: string; scm: string; pressure_pa: number }[];
+  selector_valves: { tag: string; name: string; header: string; opening_pct: number; commanded_pct: number; moving: boolean; stroke_time_s: number }[];
+}
+
+export type SchPoint = [number, number];
+
+export interface SchComponent {
+  id: string;
+  type: string;
+  model: string | null;
+  models: string[];
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  ports: Record<string, SchPoint>;
+  flow_path: string | null;
+  tap: SchPoint | null;
+  label: { dx: number; dy: number; anchor: "start" | "middle" | "end" } | null;
+  group: string | null;
+  note: string;
+}
+
+export interface SchLine {
+  id: string;
+  cls: "production" | "annulus" | "service" | "chemical" | "methanol" | "downhole_chemical" | "hydraulic";
+  points: SchPoint[];
+  elements: string[];
+  chemical: string | null;
+  model?: string | null;
+  from_ref: string | null;
+  to_ref: string | null;
+}
+
+export interface SchematicLayout {
+  id: string;
+  title: string;
+  subtitle: string;
+  width: number;
+  height: number;
+  reference: { source: string; method: string; photo_origin_px: SchPoint; scale: number; notes: string[] };
+  groups: { id: string; label: string; x: number; y: number; w: number; h: number; frame: boolean }[];
+  lines: SchLine[];
+  components: SchComponent[];
+  connectors: { id: string; x: number; y: number; direction: "left" | "right" | "up" | "down"; label: string; model: string | null; label_side?: "left" | "right" }[];
+  annotations: { type: string; x: number; y: number; w?: number; h?: number; text?: string; label?: string }[];
+}
+
+export interface PhaseRates {
+  oil_sm3_d: number;
+  gas_sm3_d: number;
+  water_sm3_d: number;
+  liquid_sm3_d: number;
+  gor_sm3_sm3: number;
+  water_cut: number;
+  mass_kg_s: number;
+  oil_mass_kg_s: number;
+  gas_mass_kg_s: number;
+  water_mass_kg_s: number;
+}
+
+export interface MultiphaseNode {
+  node: string;
+  name: string;
+  p_pa: number;
+  t_k: number;
+  gor_sm3_sm3: number;
+  water_cut: number;
+  rs_sm3_sm3: number;
+  bubble_point_pa: number;
+  bo: number;
+  bg: number;
+  bw: number;
+  z: number;
+  rho_oil: number;
+  rho_gas: number;
+  rho_water: number;
+  mu_oil_pas: number;
+  mu_gas_pas: number;
+  mu_water_pas: number;
+  gvf: number;
+  rho_mix_ns: number;
+  free_gas_mass_fraction: number;
+  q_oil_m3s: number;
+  q_gas_m3s: number;
+  q_water_m3s: number;
+  mass_flow_kg_s: number;
+}
+
+export interface MultiphasePipe {
+  element: string;
+  segment?: number;
+  node?: string;
+  distance_m?: number;
+  pattern: string;
+  holdup: number;
+  lambda_l: number;
+  v_sl: number;
+  v_sg: number;
+  rho_s: number;
+  rho_ns: number;
+  friction_multiplier?: number;
+  p_pa: number;
+  t_k: number;
+  gor?: number;
+  water_cut?: number;
+}
+
+export interface ComponentBalance {
+  in_kg: number;
+  out_kg: number;
+  inventory_kg: number;
+  inventory_change_kg: number;
+  residual_kg: number;
+  relative_residual: number;
+}
+
+export interface MultiphaseReport {
+  fluid_model: "black_oil";
+  correlation: "beggs_brill" | "no_slip";
+  dynamic_formulation: string;
+  standard_conditions: { p_pa: number; t_k: number; note: string };
+  reference_density_kg_m3: number;
+  params: {
+    name: string;
+    oil_api: number;
+    gas_specific_gravity: number;
+    producing_gor_sm3_sm3: number;
+    water_cut: number;
+    water_salinity_wt_pct: number;
+    oil_density_sc_kg_m3: number;
+    gas_density_sc_kg_m3: number;
+    water_density_sc_kg_m3: number;
+    bubble_point_reservoir_pa: number;
+  };
+  rates_reservoir: PhaseRates;
+  rates_arrival: PhaseRates;
+  nodes: MultiphaseNode[];
+  pipes: MultiphasePipe[];
+  mass_balance: Record<"oil" | "gas" | "water", ComponentBalance> | null;
+  validity: { correlation: string; in_range: boolean; notes: string[] }[];
+  steady_reference: { ok: boolean; message: string; critical_choke: boolean; rates: PhaseRates | null } | null;
+  limitations: string[];
+}
+
+export interface MPFMValues {
+  oil_sm3_d: number;
+  gas_sm3_d: number;
+  water_sm3_d: number;
+  liquid_sm3_d: number;
+  oil_m3_d: number;
+  gas_m3_d: number;
+  water_m3_d: number;
+  liquid_m3_d: number;
+  mass_kg_s: number;
+  mixture_density_kg_m3: number;
+  water_cut: number;
+  gor_sm3_sm3: number;
+  gvf: number;
+  lvf: number;
+}
+
+export interface MPFMSnapshot {
+  tag: string;
+  name?: string;
+  quality: "GOOD" | "DEGRADED" | "BAD" | "NOT_READY" | "NOT_MODELLED";
+  reason?: string;
+  location_node?: string;
+  principle?: string;
+  geometry?: { inlet_diameter_m: number; beta: number; throat_diameter_m: number; discharge_coefficient: number };
+  flags?: { severity: "info" | "warning" | "error"; code: string; message: string }[];
+  measured?: MPFMValues | null;
+  true?: MPFMValues | null;
+  difference?: Partial<MPFMValues> | null;
+  uncertainty_pct?: Record<string, number> | null;
+  uncertainty_budget?: Record<string, Record<string, number>> | null;
+  signals?: { p_pa: number | null; t_k: number | null; dp_pa: number | null; attenuation_low: number | null; attenuation_high: number | null;
+    true_dp_pa: number | null; true_p_pa: number | null; true_t_k: number | null };
+  phase_fractions?: { measured: Record<string, number>; raw: Record<string, number>; true_gas_void_fraction: number | null } | null;
+  meter_slip_model?: string;
+  meter_pvt?: { oil_api: number; gas_specific_gravity: number; water_salinity_wt_pct: number; producing_gor_sm3_sm3: number; water_cut: number };
+  true_fluid?: { oil_api: number; gas_specific_gravity: number; water_salinity_wt_pct: number };
+  faults?: { dp_offset_bar: number; dp_stuck: boolean; gamma_failed: boolean; pt_failed: boolean };
+  calibration?: { last_s: number; days_since: number; interval_days: number; cd_actual: number; cd_drift_pct_per_year: number };
+  envelope?: { dp_min_bar: number; dp_max_bar: number; gvf_max: number };
+  reference_conditions?: string;
+  sand_effect?: string;
 }
 
 export type IntegrityType = "pressure_hold" | "inflow" | "stroke";
@@ -225,7 +467,9 @@ export interface LayoutPoint {
 }
 
 export interface LayoutAnnotation {
-  type: "rect" | "line" | "text";
+  type: "rect" | "line" | "text" | "body" | "cap" | "connector";
+  direction?: "left" | "right" | "up" | "down";
+  label_at?: "above" | "below" | "beyond";
   x?: number;
   y?: number;
   w?: number;
@@ -235,7 +479,7 @@ export interface LayoutAnnotation {
   x2?: number;
   y2?: number;
   label?: string;
-  label_position?: "top" | "bottom";
+  label_position?: "top" | "bottom" | "top-right";
   text?: string;
 }
 
@@ -246,6 +490,8 @@ export interface Layout {
   waypoints: Record<string, LayoutPoint[]>;
   instruments: Record<string, LayoutPoint>;
   annotations: LayoutAnnotation[];
+  /** where along its line each valve symbol sits (0..1, default 0.5) */
+  symbol_fraction?: Record<string, number>;
 }
 
 export interface SimulationState {
@@ -258,6 +504,21 @@ export interface SimulationState {
   briefing?: string[];
   steady_reference?: { status: string; q_m3s: number | null; node_pressure_pa: Record<string, number | null>; note: string };
   chemicals?: ChemicalSnapshot[];
+  /** engineering tag -> display tag of the reference HMI (static) */
+  tag_aliases?: Record<string, TagAlias>;
+  /** engineering-workstation schematic layout (static), null if none */
+  schematic?: SchematicLayout | null;
+  control_hydraulics?: ControlHydraulics | null;
+  fluid_model?: "single_phase" | "black_oil";
+  /** fluid models this scenario supports (static) */
+  fluid_models?: ("single_phase" | "black_oil")[];
+  multiphase?: MultiphaseReport | null;
+  mpfm?: MPFMSnapshot | null;
+  sand_choke?: SandChokeResults | null;
+  /** static: inputs entered for this session (null = scenario has none) */
+  sand_choke_inputs?: SandChokeInputs | null;
+  sand_choke_example_available?: boolean;
+  erosion_materials?: ErosionMaterial[];
   chemical_config?: { id: string; name: string; color: string; display_unit: "ppm" | "vol%"; target_min: number | null; target_max: number | null }[];
   integrity?: { tests: IntegrityTestSnapshot[]; test_points: { transmitter: string; node: string; description: string }[] };
   integrity_presets?: IntegrityPreset[];

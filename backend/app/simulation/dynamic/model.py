@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.core import units as u
-from app.models.scenario import ChemicalConfig, ScenarioConfig
+from app.models.scenario import ChemicalConfig, ChemicalRouteConfig, ScenarioConfig
 from app.simulation.build import BuiltSystem
 from app.simulation.components.elements import CheckValveElement, Element, PipeElement, RestrictionElement
 from app.simulation.dynamic.builder import PRODUCTION, DynamicLayout, build_dynamic_layout
@@ -44,6 +44,18 @@ INJECTION_MIN_M3S = 1e-9
 
 
 @dataclass
+class InjRoute:
+    """Additional injection route of a circuit into the production path."""
+
+    cfg: ChemicalRouteConfig
+    supply_idx: int
+    link: int
+    inj_node: str
+    status: str = "unknown"
+    cum_m3: float = 0.0
+
+
+@dataclass
 class ChemCircuit:
     cfg: ChemicalConfig
     k: int  # chemical index in the transport grid
@@ -58,6 +70,13 @@ class ChemCircuit:
     p_static: float
     status: str = "unknown"
     cum_injected_m3: float = 0.0
+    # optional second route into the annulus service line (same pump)
+    ann_supply_idx: int | None = None
+    ann_link: int | None = None
+    ann_status: str = "none"
+    cum_to_annulus_m3: float = 0.0
+    # further routes into the production path (same pump)
+    routes: list[InjRoute] = field(default_factory=list)
 
     @property
     def p_supply(self) -> float:
@@ -96,6 +115,9 @@ class DynamicModel:
                 cps[ec.id] = ec.transport_cells_per_segment or self.cfg.dynamics.transport_cells_per_segment
         self.chem_ids = [c.id for c in self.cfg.chemicals]
         self.grid = TransportGrid(self.layout, topo, len(self.chem_ids), cps, node_vol)
+        self._cps, self._node_vol = cps, node_vol
+        #: Multiphase (black-oil) coupling, attached by the engine (None = single phase).
+        self.mp = None
         self.elements: dict[str, Element] = {e.id: e for e in [*topo.path, *self.built.branch_elements]}
         # production node -> outgoing link along the path (flow metering)
         self.prod_out_link: dict[str, int] = {}
@@ -119,10 +141,31 @@ class DynamicModel:
             li = self.layout.element_link[inj_el]
             if self.net.links[li].dn != self.layout.node_index[c.injection_node]:
                 raise ValueError(f"chemical {c.id}: the injection element must discharge into {c.injection_node}")
-            self.circuits.append(ChemCircuit(
+            circuit = ChemCircuit(
                 c, k, sidx, li, c.injection_node, z.rho, z.cp, u.c_to_k(c.injection_temperature_c), c.pump.running,
                 u.bara_to_pa(c.pump.discharge_pressure_bara), u.bara_to_pa(c.pump.static_pressure_bara),
-            ))
+            )
+            if c.annulus_supply_node:
+                if not (c.annulus_valve and c.annulus_check_valve):
+                    raise ValueError(f"chemical {c.id}: annulus route needs annulus_valve and annulus_check_valve")
+                a_idx = self.layout.node_index[c.annulus_supply_node]
+                if not self.net.nodes[a_idx].fixed:
+                    raise ValueError(f"chemical {c.id}: annulus supply node {c.annulus_supply_node} must be a subsystem boundary")
+                a_link = self.layout.element_link[self._element_by_tag(c.annulus_check_valve).id]
+                if self.net.nodes[self.net.links[a_link].dn].zone in (PRODUCTION, c.fluid):
+                    raise ValueError(f"chemical {c.id}: the annulus check valve must discharge into an annulus-system node")
+                circuit.ann_supply_idx, circuit.ann_link = a_idx, a_link
+            for r in c.routes:
+                r_idx = self.layout.node_index[r.supply_node]
+                if not self.net.nodes[r_idx].fixed:
+                    raise ValueError(f"chemical {c.id} route {r.id}: supply node {r.supply_node} must be a subsystem boundary")
+                if r.injection_node not in topo.nodes:
+                    raise ValueError(f"chemical {c.id} route {r.id}: injection node {r.injection_node} must be on the production path")
+                r_link = self.layout.element_link[self._element_by_tag(r.check_valve).id]
+                if self.net.links[r_link].dn != self.layout.node_index[r.injection_node]:
+                    raise ValueError(f"chemical {c.id} route {r.id}: check valve {r.check_valve} must discharge into {r.injection_node}")
+                circuit.routes.append(InjRoute(r, r_idx, r_link, r.injection_node))
+            self.circuits.append(circuit)
         # annulus lumped temperature
         self.annulus_nodes: list[int] = []
         at = self.cfg.dynamics.annulus_thermal
@@ -233,20 +276,37 @@ class DynamicModel:
         P[np.isnan(P)] = u.P_ATM
         net.P = P
         self._apply_supply_pressures()
-        net.solve(None)
-        # thermal / transport steady state for the initial flows
-        F = self.grid.set_flows(net.Q)
-        self._inj_at = None
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
-        self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
-        self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
-        self._update_node_temperatures(None)
+        if self.mp is None:
+            net.solve(None)
+            # thermal / transport steady state for the initial flows
+            F = self.grid.set_flows(net.Q)
+            self._inj_at = None
+            dT = self._throttle(F)
+            self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            dT = self._throttle(F)
+            self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            self._update_node_temperatures(None)
+        else:
+            # property / pressure / temperature fixed-point for the initial steady state
+            for _ in range(12):
+                self.mp.update(force=True)
+                net.solve(None)
+                F = self.grid.set_flows(net.Q)
+                self._inj_at = None
+                dT = self._throttle(F)
+                self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+                self._update_node_temperatures(None)
+            self.mp.comp.step(None, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            self.mp.update(force=True)
+            self.mp.initialise_content()
         self.S = np.zeros(net.n)
         self.p0 = net.P.copy()
         self.p_prev = net.P.copy()
         for c in self.circuits:
             c.status = self._circuit_status(c)
+            c.ann_status = self._annulus_route_status(c)
+            for r in c.routes:
+                r.status = self._route_status(c, r)
         self._init_instruments()
 
     # -------------------------------------------------------------- control
@@ -254,6 +314,10 @@ class DynamicModel:
         net = self.net
         for c in self.circuits:
             net.p_fixed[c.supply_idx] = c.p_supply
+            if c.ann_supply_idx is not None:
+                net.p_fixed[c.ann_supply_idx] = c.p_supply  # same pump
+            for r in c.routes:
+                net.p_fixed[r.supply_idx] = c.p_supply  # same pump
         res_i = self.layout.node_index[self.topology.reservoir_node]
         bnd_i = self.layout.node_index[self.topology.boundary_node]
         net.p_fixed[res_i] = self.ipr.p_res
@@ -293,15 +357,25 @@ class DynamicModel:
                 net.gravity[li] *= fluid.rho / old.rho
 
     # ------------------------------------------------------------------ step
+    def _injection_points(self, c: ChemCircuit) -> list[tuple[str, float]]:
+        """(production node, injected flow [m3/s]) for every route of a circuit."""
+        pts = [(c.inj_node, float(self.net.Q[c.inj_link]))]
+        pts += [(r.inj_node, float(self.net.Q[r.link])) for r in c.routes]
+        return pts
+
+    def total_injection(self, c: ChemCircuit) -> float:
+        """Total flow of the chemical into the production path [m3/s]."""
+        return sum(max(q, 0.0) for _, q in self._injection_points(c))
+
     def _injections(self, F: np.ndarray) -> list[tuple[int, int, float, float, float]]:
         out = []
         for c in self.circuits:
-            q = float(self.net.Q[c.inj_link])
-            if q <= 0:
-                continue
-            lk = self.grid.node_lookup[c.inj_node]
-            ci = lk.cell if lk.cell is not None else self.grid.injection_cell(lk.face, F)  # type: ignore[arg-type]
-            out.append((c.k, ci, q, c.t_inj, c.rho * c.cp))
+            for node, q in self._injection_points(c):
+                if q <= 0:
+                    continue
+                lk = self.grid.node_lookup[node]
+                ci = lk.cell if lk.cell is not None else self.grid.injection_cell(lk.face, F)  # type: ignore[arg-type]
+                out.append((c.k, ci, q, c.t_inj, c.rho * c.cp))
         return out
 
     def injections_at_nodes(self) -> dict[str, list[tuple[int, float]]]:
@@ -310,9 +384,9 @@ class DynamicModel:
             return cached
         out: dict[str, list[tuple[int, float]]] = {}
         for c in self.circuits:
-            q = float(self.net.Q[c.inj_link])
-            if q > 0:
-                out.setdefault(c.inj_node, []).append((c.k, q))
+            for node, q in self._injection_points(c):
+                if q > 0:
+                    out.setdefault(node, []).append((c.k, q))
         self._inj_at = out
         return out
 
@@ -342,9 +416,20 @@ class DynamicModel:
         v = self.grid.V[cells]
         return float((self.grid.T[cells] * v).sum() / v.sum())
 
+    def _throttle(self, F: np.ndarray) -> np.ndarray:
+        lp = self.mp.link_props if self.mp is not None else None
+        return self.grid.throttle(F, self.net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta, lp)
+
+    def attach_multiphase(self, fluid, rho_ref: float, gor: float, wc: float, correlation: str) -> None:
+        from app.simulation.multiphase.dynamic import MultiphaseCoupling
+
+        self.mp = MultiphaseCoupling(self, fluid, rho_ref, gor, wc, correlation, self._cps, self._node_vol)
+
     def step(self, dt: float, t_now: float) -> None:
         net = self.net
         self._apply_supply_pressures()
+        if self.mp is not None:
+            self.mp.update()
         P_old, Q_old = net.P.copy(), net.Q.copy()
         try:
             net.solve(dt, self.S)
@@ -353,12 +438,20 @@ class DynamicModel:
             self.failed = f"dynamic hydraulic solver failed: {exc}"
             raise DynamicSolverError(self.failed) from exc
         F = self.grid.set_flows(net.Q)
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
+        if self.mp is not None:
+            self.mp.set_cell_targets(P_old)
+        dT = self._throttle(F)
         inj = self._injections(F)
         self._inj_at = None
         for c in self.circuits:
             c.cum_injected_m3 += max(float(net.Q[c.inj_link]), 0.0) * dt
+            if c.ann_link is not None:
+                c.cum_to_annulus_m3 += max(float(net.Q[c.ann_link]), 0.0) * dt
+            for r in c.routes:
+                r.cum_m3 += max(float(net.Q[r.link]), 0.0) * dt
         self.grid.step(dt, F, dT, inj, self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+        if self.mp is not None:
+            self.mp.comp.step(dt, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp, thermal=False)
         self._update_node_temperatures(dt)
         self.max_rate_pa_s = float(np.max(np.abs(net.P - P_old)[~net.fixed])) / dt if net.n else 0.0
         self.p_prev = P_old
@@ -389,6 +482,13 @@ class DynamicModel:
         P = self.net.P
         return float(P[info.node_idx[k]] * (1 - w) + P[info.node_idx[k + 1]] * w)
 
+    def _pv_flow_ref(self, inst: Instrument) -> float | None:
+        mp, self.mp = self.mp, None
+        try:
+            return self._pv(inst)
+        finally:
+            self.mp = mp
+
     def _pv(self, inst: Instrument) -> float | None:
         net = self.net
         idx = self.layout.node_index
@@ -405,6 +505,9 @@ class DynamicModel:
                 info = self.layout.pipes[inst.element]
                 return float(self.T_node[info.node_idx[0]])
             return self.node_temperature(inst.node)  # type: ignore[arg-type]
+        if inst.type == "flow" and self.mp is not None:
+            q = self._pv_flow_ref(inst)
+            return None if q is None else self.mp.in_situ_flow(inst, q)
         if inst.type == "flow":
             if inst.element:
                 e = self.elements[inst.element]
@@ -538,13 +641,45 @@ class DynamicModel:
                 crack = e.cracking_pressure
         return c.p_supply + head - float(net.P[inj_i]) - crack
 
-    def update_circuit_status(self) -> list[tuple[ChemCircuit, str, str]]:
+    def _annulus_route_status(self, c: ChemCircuit) -> str:
+        if c.ann_link is None:
+            return "none"
+        miv = self._element_by_tag(c.cfg.annulus_valve)  # type: ignore[arg-type]
+        miv_open = not (isinstance(miv, RestrictionElement) and miv.actuator.position_pct <= 0)
+        if float(self.net.Q[c.ann_link]) > INJECTION_MIN_M3S and miv_open:
+            return "injecting"
+        if not c.running:
+            return "pump_stopped"
+        return "isolated" if not miv_open else "insufficient_differential"
+
+    def _route_status(self, c: ChemCircuit, r: InjRoute) -> str:
+        v = self._element_by_tag(r.cfg.valve)
+        v_open = not (isinstance(v, RestrictionElement) and v.actuator.position_pct <= 0)
+        if float(self.net.Q[r.link]) > INJECTION_MIN_M3S and v_open:
+            return "injecting"
+        if not c.running:
+            return "pump_stopped"
+        return "isolated" if not v_open else "insufficient_differential"
+
+    def update_circuit_status(self) -> list[tuple[ChemCircuit, str, str, str]]:
+        """Status transitions as (circuit, old, new, route) with route
+        "production" (main injection point) or "annulus" (service line)."""
         changes = []
         for c in self.circuits:
             s = self._circuit_status(c)
             if s != c.status:
-                changes.append((c, c.status, s))
+                changes.append((c, c.status, s, "production"))
                 c.status = s
+            if c.ann_link is not None:
+                a = self._annulus_route_status(c)
+                if a != c.ann_status:
+                    changes.append((c, c.ann_status, a, "annulus"))
+                    c.ann_status = a
+            for r in c.routes:
+                rs = self._route_status(c, r)
+                if rs != r.status:
+                    changes.append((c, r.status, rs, f"route:{r.cfg.id}"))
+                    r.status = rs
         return changes
 
     def chemical_front(self, c: ChemCircuit) -> dict:
@@ -603,7 +738,7 @@ class DynamicModel:
                             "message": f"Absolute pressure at {nm} is {u.pa_to_bara(p):.2f} bara (<= 0): a liquid cannot sustain "
                                        "this (column separation / cavitation is not modelled). Results are not physically valid.",
                             "location": nd.topo})
-            elif nd.zone == PRODUCTION and nd.topo and p < self.fluid.p_bubble:
+            elif self.mp is None and nd.zone == PRODUCTION and nd.topo and p < self.fluid.p_bubble:
                 out.append({"severity": "warning", "code": "BELOW_BUBBLE_POINT",
                             "message": f"Pressure at {topo_nodes[nd.topo].name} ({u.pa_to_bara(p):.1f} bara) is below the bubble "
                                        f"point ({u.pa_to_bara(self.fluid.p_bubble):.1f} bara): gas would come out of solution; "
@@ -613,8 +748,10 @@ class DynamicModel:
             out.append({"severity": "warning", "code": "REVERSE_FLOW",
                         "message": "Fluid is flowing back into the reservoir (cross-flow / injection). Injectivity is assumed "
                                    "equal to productivity and the same fluid is assumed.", "location": None})
+        if self.mp is not None:
+            out += self.mp.diagnostics()
         for eid, info in self.layout.pipes.items():
-            if info.zone != PRODUCTION:
+            if info.zone != PRODUCTION or self.mp is not None:
                 continue
             q = abs(float(net.Q[info.link_idx[0]]))
             if q > NO_FLOW_M3S:
@@ -623,6 +760,20 @@ class DynamicModel:
                     out.append({"severity": "info", "code": "TRANSITIONAL_FLOW",
                                 "message": f"{info.element.name}: Reynolds number {re:.0f} is in the laminar-turbulent transition; "
                                            "friction factor is uncertain.", "location": eid})
+        # Chemical sent into the annulus system is accounted separately; the
+        # annulus-system fluid composition itself is not tracked, so fluid
+        # returning to the production bore (crossover) is treated as brine.
+        if any(c.cum_to_annulus_m3 > 1e-4 for c in self.circuits):
+            for li, l in enumerate(net.links):
+                if net.blocked[li] or net.Q[li] <= NO_FLOW_M3S:
+                    continue
+                if net.nodes[l.up].zone == "annulus" and net.nodes[l.dn].zone == PRODUCTION:
+                    out.append({"severity": "info", "code": "ANNULUS_COMPOSITION_UNTRACKED",
+                                "message": f"Annulus-system fluid is entering the production bore through {l.element_id}. Methanol "
+                                           "previously injected into the annulus service line is not tracked inside the annulus, so "
+                                           "this inflow is treated as annulus brine in the production-line concentrations.",
+                                "location": l.element_id})
+                    break
         for comp in net.components():
             if not any(net.fixed[i] for i in comp):
                 names = sorted({net.nodes[i].topo for i in comp if net.nodes[i].topo})

@@ -5,6 +5,7 @@ import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Panel } from "@/components/ui/primitives";
 import { valveVisual, VALVE_LABEL } from "@/lib/stateColors";
 import { fmt, formatDuration, paToBarDelta } from "@/lib/units";
+import { displayTag } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { RestrictionSnapshot } from "@/types/simulation";
 
@@ -14,17 +15,19 @@ const GROUP_OF: Record<string, "production" | "annulus" | "chemical"> = {
   scssv: "production",
   master: "production",
   wing: "production",
+  swab: "production",
   isolation: "production",
   choke: "production",
   annulus_master: "annulus",
   annulus_wing: "annulus",
   crossover: "annulus",
+  service_line: "annulus",
   injection_isolation: "chemical",
   metering: "chemical",
 };
 
 function ValveCard({ v }: { v: RestrictionSnapshot }) {
-  const { actions, selectTag, selection } = useWorkstation();
+  const { actions, selectTag, selection, state } = useWorkstation();
   const vis = valveVisual(v);
   const selected = selection?.type === "element" && selection.id === v.id;
   return (
@@ -37,7 +40,7 @@ function ValveCard({ v }: { v: RestrictionSnapshot }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="num text-[15px] font-semibold">{v.tag}</div>
+          <div className="num text-[15px] font-semibold" title={v.tag}>{displayTag(state, v.tag)}</div>
           <div className="truncate text-[12.5px] text-dim">{v.name}</div>
         </div>
         <Badge tone={VIS_TONE[vis]}>{VALVE_LABEL[vis].toLowerCase()}</Badge>
@@ -90,8 +93,8 @@ export function ValvesPage() {
   const { state } = useWorkstation();
   const valves = state.elements.filter((e): e is RestrictionSnapshot => e.kind === "valve" || e.kind === "choke");
   const groups: { id: "production" | "annulus" | "chemical"; title: string; sub: string; icon: React.ReactNode }[] = [
-    { id: "production", title: "Production tree & well", sub: "SCSSV, master, wing and production choke", icon: <Workflow size={16} /> },
-    { id: "annulus", title: "Annulus", sub: "Annulus master, wing and crossover valves", icon: <Layers size={16} /> },
+    { id: "production", title: "Production tree & well", sub: "SCSSV, master, wing, swab and production choke", icon: <Workflow size={16} /> },
+    { id: "annulus", title: "Annulus", sub: "Annulus master, wing, crossover and service line valves", icon: <Layers size={16} /> },
     { id: "chemical", title: "Chemical injection", sub: "Isolation and metering valves of each circuit", icon: <Droplets size={16} /> },
   ];
   return (

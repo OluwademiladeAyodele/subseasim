@@ -34,6 +34,16 @@ from app.core import units as u
 from app.core.config import Settings, settings as default_settings
 from app.models.scenario import ScenarioConfig
 from app.simulation.build import build_fluid, build_system
+from app.scenarios.loader import get_schematic
+from app.simulation.control.hydraulics import ControlHydraulics
+from app.simulation.fluid_properties.black_oil import P_SC, T_SC, BlackOilFluid, BlackOilParams
+from app.simulation.hydraulics.network import _failed as _hyd_failed
+from app.models.sand import SandChokeInputs
+from app.simulation.mpfm.meter import MPFM
+from app.simulation.sand.erosion import MATERIALS
+from app.simulation.sand.system import SandChokeSystem, configure_choke, production_choke
+from app.simulation.multiphase.report import build_report
+from app.simulation.multiphase.steady import solve_steady
 from app.simulation.components.elements import (
     CheckValveElement,
     ChokeElement,
@@ -105,14 +115,36 @@ class SimulationEngine:
         self.history = History(cfg.history_length)
         self.time_scale = 1.0
         self._mode_override = mode
+        self._fluid_model_override: str | None = None
+        #: Sand & choke inputs entered in this session (survive reset / model switches).
+        self._sand_inputs: SandChokeInputs | None = None
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
     # ------------------------------------------------------------------ setup
     def _load(self, scenario: ScenarioConfig) -> None:
         self.scenario = scenario
+        self.dyn = None  # a reload must never see the previous run's dynamic model
         self.mode: Mode = self._mode_override or scenario.dynamics.mode
         built = build_system(scenario)
+        self.fluid_model = self._fluid_model_override or scenario.fluid_model
+        if self.fluid_model == "black_oil" and scenario.black_oil is None:
+            self.fluid_model = "single_phase"
+        self.bo: BlackOilFluid | None = None
+        self.mp_steady = None
+        self._ref_dirty = False
+        if self.fluid_model == "black_oil":
+            bc = scenario.black_oil
+            self.bo = BlackOilFluid(self._bo_params(bc.oil_api, bc.gas_specific_gravity, bc.producing_gor_sm3_sm3,
+                                                    bc.water_cut_fraction, bc.water_salinity_wt_pct))
+            self.mp_gor, self.mp_wc, self.mp_correlation = bc.producing_gor_sm3_sm3, bc.water_cut_fraction, bc.correlation
+            st, rho, drdp, drdt, cp = self.bo.mixture(built.ipr.p_res, built.ipr.t_res)
+            self.rho_ref = float(rho[0])
+            # equivalent "reference" liquid: the network, thermal model and transport work in
+            # reference volumes (mass / rho_ref); see docs/MULTIPHASE_FLOW_MODEL.md section 5
+            built.fluid = ConstantPropertyLiquid(
+                name=f"{bc.name} (three-phase black oil)", rho=self.rho_ref, mu=float(st.mu_l[0]), cp=float(cp[0]),
+                beta=float(-drdt[0] / rho[0]), p_bubble=0.0, compressibility=float(drdp[0] / rho[0]))
         self.built = built
         self.topology = built.topology
         self.fluid: ConstantPropertyLiquid = built.fluid
@@ -137,6 +169,16 @@ class SimulationEngine:
         self._settle_since: float | None = None
         self.achieved_speed: float | None = None
         self.hyd: HydraulicResult | None = None
+        self.ctrl = ControlHydraulics(scenario.control_hydraulics) if scenario.control_hydraulics else None
+        self.sand: SandChokeSystem | None = None
+        self._sand_health = None
+        self._sand_alarm = False
+        self._sand_check_t = 0.0
+        sand_inputs = self.sand_inputs
+        if sand_inputs is not None:
+            configure_choke(production_choke(self), sand_inputs)
+            if self.bo is not None:
+                self.sand = SandChokeSystem(self, sand_inputs)
         self._solve()
         # Initial condition: thermal steady state for the initial configuration.
         self.thermal.step(self.hyd.q if self.hyd.ok else 0.0, self.hyd.element_dp, None)
@@ -144,9 +186,133 @@ class SimulationEngine:
         self.integrity = IntegrityManager(self)
         if self.mode == "dynamic":
             self.dyn = DynamicModel(scenario, built, self.fluid, self.ipr, self.p_boundary, built.t_boundary_fluid, self.instruments)
+            if self.bo is not None:
+                self.dyn.attach_multiphase(self.bo, self.rho_ref, self.mp_gor, self.mp_wc, self.mp_correlation)
             self.dyn.initialise(self.hyd)
+        if self.sand is not None:
+            self.sand._update_rates_only()  # first evaluation once the operating point exists
+        self.mpfm: MPFM | None = None
+        if scenario.mpfm is not None and self.bo is not None:
+            self.mpfm = MPFM(scenario.mpfm, self.bo, self.mp_gor, self.mp_wc)
+            self._mpfm_update(force=True)
         self._measure()
         self._record_sample(force=True)
+
+    # ------------------------------------------------------------------ MPFM
+    def _mpfm_truth(self) -> tuple[float, float, float, float, float] | None:
+        """True local state at the meter: (p, T, mass flow into the node, GOR, WC)."""
+        loc = self.mpfm.cfg.location_node  # type: ignore[union-attr]
+        nodes = self.topology.node_order
+        if loc not in nodes or loc == nodes[0]:
+            return None
+        up = nodes[nodes.index(loc) - 1]
+        if self.dyn is not None:
+            d = self.dyn
+            hid = d.layout.node_index[loc]
+            k = d.mp.pos.get(hid)
+            gor_n, wc_n = d.mp.node_composition()
+            gor, wc = (float(gor_n[k]), float(wc_n[k])) if k is not None else (self.mp_gor, self.mp_wc)
+            w = self.rho_ref * float(d.net.Q[d.prod_out_link[up]])
+            return d.node_pressure(loc), d.node_temperature(loc), w, gor, wc
+        h = self.hyd
+        if not h.ok or h.node_pressure.get(loc) is None:
+            return None
+        return h.node_pressure[loc], self.thermal.node_temperature.get(loc, self.ipr.t_res), self.rho_ref * max(h.q, 0.0), self.mp_gor, self.mp_wc
+
+    def _mpfm_update(self, force: bool = False) -> None:
+        m = self.mpfm
+        if m is None or not (force or m.due(self.time_s)):
+            return
+        tr = self._mpfm_truth()
+        if tr is None:
+            return
+        for old, new in m.update(self.time_s, *tr):
+            sev = "error" if new == "BAD" else "warning" if new == "DEGRADED" else "info"
+            why = "; ".join(f["message"] for f in m.flags) or "all checks passed"
+            self.events.add(self.time_s, "instrument", f"{m.cfg.tag} measurement quality {old} -> {new}: {why}",
+                            component=m.cfg.tag, severity=sev)
+
+    # ------------------------------------------------------- sand & choke
+    @property
+    def sand_inputs(self) -> SandChokeInputs | None:
+        if self._sand_inputs is not None:
+            return self._sand_inputs
+        return self.scenario.sand_choke.model_copy(deep=True) if self.scenario.sand_choke is not None else None
+
+    def set_sand_inputs(self, inputs: SandChokeInputs, label: str = "updated") -> None:
+        self._sand_inputs = inputs
+        configure_choke(production_choke(self), inputs)
+        if self.bo is not None:
+            if self.sand is None:
+                self.sand = SandChokeSystem(self, inputs)
+            else:
+                self.sand.apply_inputs(inputs)
+        self.recompute()
+        if self.dyn is not None:
+            self.dyn.net.refresh_restrictions()
+        self.events.add(self.time_s, "instrument", f"Sand & choke inputs {label}: predictions recalculated"
+                        + ("" if self.bo is not None else " (sand and erosion need the three-phase fluid model)"))
+        self._record_sample(force=True)
+
+    def load_sand_example(self) -> None:
+        if self.scenario.sand_choke_example is None:
+            raise CommandRejected("this scenario has no illustrative sand / choke example")
+        self.set_sand_inputs(self.scenario.sand_choke_example.model_copy(deep=True), "replaced by the ILLUSTRATIVE example set")
+
+    def sand_fast_forward(self, days: float) -> None:
+        if self.sand is None:
+            raise CommandRejected("sand and choke erosion need the three-phase fluid model")
+        self.sand.fast_forward(days)
+        self.events.add(self.time_s, "instrument",
+                        f"Choke wear fast-forwarded {days:g} days at the current operating point (quasi-steady: sand rate, opening "
+                        f"and differential held constant); trim service time now {self.sand.service_s / 86400:.0f} days")
+        self._sand_events(force=True)
+        self._record_sample(force=True)
+
+    def _sand_events(self, force: bool = False) -> None:
+        s = self.sand
+        if s is None or (not force and self.time_s - self._sand_check_t < 60.0):
+            return
+        self._sand_check_t = self.time_s
+        snap = s.snapshot()
+        cat = snap["health"]["category"]
+        if self._sand_health is not None and cat != self._sand_health:
+            sev = "error" if cat in ("Critical condition", "Changeout assessment required") else "warning" if cat != "Normal" else "info"
+            self.events.add(self.time_s, "alarm" if sev != "info" else "instrument",
+                            f"Choke health {self._sand_health} -> {cat}: {snap['recommendation']['text']}", component=s.choke.tag if s.choke else None,
+                            severity=sev)
+        self._sand_health = cat
+        alarm = bool(snap["detector"]["alarm"])
+        if alarm != self._sand_alarm:
+            d = snap["detector"]
+            self.events.add(self.time_s, "alarm" if alarm else "instrument",
+                            f"{d['tag']} sand {'ALARM' if alarm else 'alarm cleared'}: {d['reading_g_s'] or 0:.3f} g/s "
+                            f"(threshold {d['alarm_threshold_g_s']:g} g/s)", component=d["tag"], severity="warning" if alarm else "info")
+            self._sand_alarm = alarm
+
+    def set_mpfm_faults(self, **kw) -> None:
+        if self.mpfm is None:
+            raise CommandRejected("no multiphase flow meter is active (three-phase fluid model required)")
+        changes = {k: v for k, v in kw.items() if v is not None}
+        if not changes:
+            return
+        self.mpfm.set_faults(**changes)
+        desc = ", ".join(f"{k.replace('_', ' ')} = {v}" for k, v in changes.items())
+        self.events.add(self.time_s, "instrument", f"{self.mpfm.cfg.tag} fault settings changed (instructor): {desc}",
+                        component=self.mpfm.cfg.tag, severity="warning")
+        self._mpfm_update(force=True)
+
+    def calibrate_mpfm(self) -> None:
+        if self.mpfm is None:
+            raise CommandRejected("no multiphase flow meter is active (three-phase fluid model required)")
+        tr = self._mpfm_truth()
+        gor, wc = (tr[3], tr[4]) if tr else (self.mp_gor, self.mp_wc)
+        self.mpfm.calibrate(self.time_s, self.bo, gor, wc)
+        self.events.add(self.time_s, "instrument",
+                        f"{self.mpfm.cfg.tag} calibrated: dP zero check, meter PVT updated from a fluid sample "
+                        f"(GOR {gor:.0f} Sm3/Sm3, WC {wc * 100:.1f} %, salinity {self.bo.params.water_salinity_wt_pct:.1f} wt%), "
+                        "discharge coefficient re-established", component=self.mpfm.cfg.tag)
+        self._mpfm_update(force=True)
 
     @property
     def dt_dynamic(self) -> float:
@@ -157,7 +323,46 @@ class SimulationEngine:
     def props(self) -> FlowProperties:
         return FlowProperties.from_fluid(self.fluid)
 
+    def _bo_params(self, api, gas_sg, gor, wc, salinity) -> BlackOilParams:
+        bc = self.scenario.black_oil
+        return BlackOilParams(bc.name, api, gas_sg, gor, wc, salinity, bc.oil_specific_heat_j_kgk, bc.gas_specific_heat_j_kgk,
+                              bc.water_specific_heat_j_kgk, bc.gas_cp_cv)
+
+    def _node_temperatures(self) -> dict[str, float]:
+        out = {self.topology.node_order[0]: self.ipr.t_res}
+        if getattr(self, "dyn", None) is not None:
+            out.update({nid: self.dyn.node_temperature(nid) for nid in self.topology.node_order[1:]})
+        else:
+            out.update(self.thermal.node_temperature)
+        for nid in self.topology.node_order:
+            out.setdefault(nid, self.ipr.t_res)
+        return out
+
+    def _solve_multiphase(self) -> None:
+        """Steady three-phase operating point (marching solver)."""
+        prev = self.hyd.node_pressure if self.hyd is not None and self.hyd.ok else None
+        topo = self.topology
+        if any(e.is_closed() for e in topo.path):
+            # closed-in: static columns at the reference (reservoir-condition) density - approximate
+            self.hyd = solve_hydraulics(topo, self.ipr.p_res, self.p_boundary, self.props, prev)
+            self.hyd.notes.append("multiphase closed-in reference: static columns at reservoir-condition density (approximate)")
+            self.mp_steady = None
+            return
+        r = solve_steady(topo, self.bo, self.ipr.p_res, self.p_boundary, self.ipr.j, self.rho_ref, self._node_temperatures(),
+                         self.mp_gor, self.mp_wc, self.mp_correlation)
+        self.mp_steady = r
+        if not r.ok:
+            self.hyd = _hyd_failed(topo, f"multiphase steady solver: {r.message}")
+            return
+        self.hyd = HydraulicResult(
+            status="solved", q=r.q_ref, node_pressure=dict(r.node_pressure), node_state={n: "flowing" for n in topo.node_order},
+            element_dp=dict(r.element_dp), element_state={e.id: "flowing" for e in topo.path}, driving_pressure=math.nan,
+            iterations=r.iterations, message=r.message)
+
     def _solve(self) -> None:
+        if self.bo is not None:
+            self._solve_multiphase()
+            return
         prev = self.hyd.node_pressure if self.hyd is not None and self.hyd.ok else None
         self.hyd = solve_hydraulics(self.topology, self.ipr.p_res, self.p_boundary, self.props, prev)
 
@@ -178,6 +383,15 @@ class SimulationEngine:
         self.readings = {
             i.tag: measure(i, self.hyd.ok, self.hyd.node_pressure, temps, q) for i in self.instruments
         }
+        if self.bo is not None and self.hyd.ok:
+            for i in self.instruments:
+                r = self.readings[i.tag]
+                nid = i.node
+                if i.type == "flow" and r.value is not None and nid in self.topology.nodes and self.hyd.node_pressure.get(nid):
+                    rho = float(self.bo.state(self.hyd.node_pressure[nid], temps[nid], self.mp_gor, self.mp_wc).rho_ns[0])
+                    r.value *= self.rho_ref / rho
+                    if r.pv is not None:
+                        r.pv *= self.rho_ref / rho
         self.diagnostics = run_diagnostics(self.topology, self.hyd, self.fluid, self.props, temps)
         if any(d.severity == "error" for d in self.diagnostics) and self.hyd.ok:
             # Physically invalid point: flag every reading rather than show plausible numbers.
@@ -191,6 +405,8 @@ class SimulationEngine:
         self._solve()
         if self.dyn is None:
             self._thermal_refresh(0.0)
+            if getattr(self, "mpfm", None) is not None:
+                self._mpfm_update(force=True)
         self._measure()
 
     # ------------------------------------------------------------------- time
@@ -200,14 +416,26 @@ class SimulationEngine:
         if self.dyn is not None:
             self._advance_dynamic(dt_total)
             return
+        moved = False
         for dt in substeps(dt_total, self.settings.max_substep_s):
+            self._hydraulics_step(dt)
             moving = [r for r in self.restrictions.values() if r.actuator.is_moving]
             for r in moving:
                 r.actuator.step(dt)
             if any(r.tag in self._production_tags for r in moving):
-                self._solve()
+                if self.bo is None:
+                    self._solve()
+                else:
+                    moved = True  # multiphase march is costly: solve once per advance
             self._thermal_refresh(dt)
             self.time_s += dt
+        if moved:
+            self._solve()
+        if self.mpfm is not None:
+            self._mpfm_update(force=True)
+        if self.sand is not None:
+            self.sand.step(dt_total)
+            self._sand_events()
         self._measure()
         self._check_outcomes()
         self._record_sample()
@@ -230,16 +458,85 @@ class SimulationEngine:
         self._measure()
         self._check_outcomes()
 
+    def _hydraulics_step(self, dt: float) -> None:
+        """Control hydraulics: header pressures, then fail-safe closure of
+        the valves whose supply has fallen below its operating minimum."""
+        if self.ctrl is None:
+            return
+        lost, restored = self.ctrl.step(dt)
+        for sid in lost:
+            sup = self.ctrl.supplies[sid]
+            p = u.pa_to_bara(self.ctrl.supply_pressure_at_actuators(sid))
+            closing = []
+            for tag in self.ctrl.fail_safe_valves(sid):
+                el = self.restrictions.get(tag)
+                if el is not None and el.actuator.commanded_pct > 0:
+                    el.actuator.command(0.0)
+                    closing.append(tag)
+                    self._pending = [x for x in self._pending if x.tag != tag]
+                    self._pending.append(_PendingOutcome(f"{tag} FAIL-SAFE CLOSE", tag, 0.0, self._key_values()))
+            self.events.add(
+                self.time_s, "alarm",
+                f"LOSS OF {sup.name.upper()} HYDRAULIC SUPPLY at the SCM ({p:.0f} bara < {u.pa_to_bara(sup.p_min):.0f} bara minimum). "
+                + (f"Fail-safe valves closing: {', '.join(closing)}." if closing else "No fail-safe valve was open."),
+                severity="error",
+                detail="Spring-return actuators close when the control fluid pressure can no longer hold them open. "
+                       "Fail-as-is actuators (choke, metering valves) stay where they are.",
+            )
+            if closing:
+                self._settle_pending = f"{sup.name} hydraulic supply lost"
+                self._settle_since = None
+        for sid in restored:
+            sup = self.ctrl.supplies[sid]
+            self.events.add(self.time_s, "operation",
+                            f"{sup.name} hydraulic supply restored at the SCM ({u.pa_to_bara(self.ctrl.supply_pressure_at_actuators(sid)):.0f} bara). "
+                            "Valves that closed fail-safe stay closed until commanded open.")
+
+    def command_selector(self, tag: str, command: str) -> None:
+        if self.ctrl is None or tag not in self.ctrl.selectors:
+            raise CommandRejected(f"unknown selector valve {tag!r}")
+        if command not in ("open", "close"):
+            raise CommandRejected("selector valve command must be 'open' or 'close'")
+        sel = self.ctrl.selectors[tag]
+        self.ctrl.command_selector(tag, command == "open")
+        h = self.ctrl.headers[sel.header]
+        note = "" if self.status == "running" else " - simulation not running: the valve will move when the simulation runs"
+        self.events.add(self.time_s, "operation",
+                        f"Selector valve {tag} {command.upper()} commanded ({h.name}, stroke ~{sel.stroke_time_s:g} s){note}", component=tag)
+
+    def set_hydraulic_supply(self, supply_id: str, available: bool) -> None:
+        if self.ctrl is None or supply_id not in self.ctrl.supplies:
+            raise CommandRejected(f"unknown hydraulic supply {supply_id!r}")
+        sup = self.ctrl.supplies[supply_id]
+        if sup.available == available:
+            return
+        self.ctrl.set_supply_available(supply_id, available)
+        self.events.add(self.time_s, "operation" if available else "alarm",
+                        f"{sup.name} hydraulic supply from the HPU {'RESTORED' if available else 'LOST (HPU trip / umbilical failure)'}",
+                        component=supply_id, severity="info" if available else "warning")
+
     def _dynamic_step(self, dt: float) -> None:
+        self._hydraulics_step(dt)
         moving = [r for r in self.restrictions.values() if r.actuator.is_moving]
         for r in moving:
             r.actuator.step(dt)
         if any(r.tag in self._production_tags for r in moving):
-            self._solve()  # steady-state reference for the new positions
+            if self.bo is None:
+                self._solve()  # steady-state reference for the new positions
+            else:
+                self._ref_dirty = True  # multiphase march: recomputed once the valves stop
+        elif self._ref_dirty and not any(r.actuator.is_moving for r in self.restrictions.values()):
+            self._solve()
+            self._ref_dirty = False
         t_next = (self._step_count + 1) * dt
         self.dyn.step(dt, t_next)  # type: ignore[union-attr]
         self._step_count += 1
         self.time_s = t_next
+        if self.mpfm is not None:
+            self._mpfm_update()
+        if self.sand is not None:
+            self.sand.step(dt)
+            self._sand_events()
         if moving:
             self.readings = self.dyn.readings()  # type: ignore[union-attr]
             self._check_outcomes()
@@ -272,6 +569,20 @@ class SimulationEngine:
             s = {"t": self.time_s, "q": self.hyd.q if self.hyd.ok else None}
         for tag, r in self.readings.items():
             s[f"inst:{tag}"] = r.value
+        sd = getattr(self, "sand", None)
+        if sd is not None and sd.rates:
+            s["sand:choke_g_s"] = sd.rates.get("m_sand_choke", 0.0) * 1000.0
+            r = sd.det.get("reading_kg_s")
+            s["sand:detector_g_s"] = None if r is None else r * 1000.0
+            dd = sd.dd_cal()
+            s["sand:max_hole_mm"] = float(dd.max()) * 1000.0 if dd.size else None
+        m = getattr(self, "mpfm", None)
+        if m is not None and m.truth is not None:
+            t_d = m.truth_derived(m.truth)
+            meas = m.filtered if m.reading is not None and m.quality != "BAD" else {}
+            for k in ("oil_sm3_d", "gas_sm3_d", "water_sm3_d", "water_cut"):
+                s[f"mpfm:{k}"] = meas.get(k)
+                s[f"mpfm_true:{k}"] = t_d[k]
         for tag, r in self.restrictions.items():
             s[f"pos:{tag}"] = r.actuator.position_pct
             s[f"cmd:{tag}"] = r.actuator.commanded_pct
@@ -304,6 +615,8 @@ class SimulationEngine:
     def load_scenario(self, scenario: ScenarioConfig) -> None:
         self.history.clear()
         self._mode_override = None
+        if scenario.id != self.scenario.id:
+            self._sand_inputs = None
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
@@ -347,6 +660,12 @@ class SimulationEngine:
         if abs(target - act.commanded_pct) < 1e-9:
             self.events.add(self.time_s, "operation", f"{tag} {verb} commanded (already at commanded position {target:.1f} %)", component=tag)
             return
+
+        if self.ctrl is not None and target > act.commanded_pct:
+            ok, why = self.ctrl.can_open(tag)
+            if not ok:
+                self.events.add(self.time_s, "rejected", f"Command rejected: {tag} {why}", component=tag, severity="warning")
+                raise CommandRejected(f"{tag}: {why}")
 
         if (isinstance(el, ValveElement) and el.subtype != "injection_isolation"
                 and target > act.position_pct and act.position_pct == 0.0):
@@ -445,7 +764,72 @@ class SimulationEngine:
             self._emit_outcome(_PendingOutcome("Boundary change", None, None, before))
         self._record_sample(force=True)
 
+    def set_fluid_model(self, model: str) -> None:
+        """Switch single-phase / three-phase and restart from the scenario initial conditions."""
+        if model not in ("single_phase", "black_oil"):
+            raise CommandRejected("fluid model must be 'single_phase' or 'black_oil'")
+        if model == "black_oil" and self.scenario.black_oil is None:
+            raise CommandRejected("this scenario has no black-oil fluid configuration")
+        self._fluid_model_override = model
+        self.history.clear()
+        self._load(self.scenario)
+        label = "THREE-PHASE black oil (oil, gas, water)" if model == "black_oil" else "SINGLE-PHASE liquid (simplified)"
+        self.events.add(0.0, "fluid", f"Fluid model set to {label} - restarted from scenario initial conditions")
+
+    def set_black_oil(self, producing_gor_sm3_sm3: float | None = None, water_cut: float | None = None,
+                      oil_api: float | None = None, gas_specific_gravity: float | None = None,
+                      water_salinity_wt_pct: float | None = None, correlation: str | None = None) -> None:
+        """Change the reservoir fluid. GOR / water cut change the composition
+        ENTERING the well (it is transported up the well with the fluid);
+        API, gas gravity and salinity re-characterise the fluid everywhere."""
+        if self.bo is None:
+            raise CommandRejected("the three-phase fluid model is not active (switch the fluid model first)")
+        p = self.bo.params
+        msgs = []
+        if producing_gor_sm3_sm3 is not None or water_cut is not None:
+            gor = p.gor_sm3_sm3 if producing_gor_sm3_sm3 is None else producing_gor_sm3_sm3
+            wc = self.mp_wc if water_cut is None else water_cut
+            if not (0 <= gor <= 2000 and 0 <= wc <= 0.98):
+                raise InvalidOperatingInput("GOR must be 0-2000 Sm3/Sm3 and water cut 0-0.98")
+            msgs.append(f"producing GOR {self.mp_gor:.0f} -> {gor:.0f} Sm3/Sm3, water cut {100 * self.mp_wc:.1f} -> {100 * wc:.1f} %")
+            self.mp_gor, self.mp_wc = gor, wc
+            if self.dyn is not None:
+                self.dyn.mp.set_reservoir_composition(gor, wc)
+        recharacterise = any(v is not None for v in (oil_api, gas_specific_gravity, water_salinity_wt_pct))
+        if recharacterise:
+            api = p.api if oil_api is None else oil_api
+            sg = p.gas_sg if gas_specific_gravity is None else gas_specific_gravity
+            sal = p.water_salinity_wt_pct if water_salinity_wt_pct is None else water_salinity_wt_pct
+            if not (10 <= api <= 70 and 0.55 <= sg <= 1.5 and 0 <= sal <= 26):
+                raise InvalidOperatingInput("API 10-70, gas gravity 0.55-1.5, salinity 0-26 wt%")
+            msgs.append(f"oil {p.api:.1f} -> {api:.1f} API, gas SG {p.gas_sg:.3f} -> {sg:.3f}, salinity {p.water_salinity_wt_pct:.1f} -> {sal:.1f} wt%")
+        self.bo = BlackOilFluid(self._bo_params(
+            p.api if oil_api is None else oil_api, p.gas_sg if gas_specific_gravity is None else gas_specific_gravity,
+            self.mp_gor, self.mp_wc, p.water_salinity_wt_pct if water_salinity_wt_pct is None else water_salinity_wt_pct))
+        if correlation is not None:
+            if correlation not in ("beggs_brill", "no_slip"):
+                raise InvalidOperatingInput("correlation must be 'beggs_brill' or 'no_slip'")
+            msgs.append(f"multiphase correlation {self.mp_correlation} -> {correlation}")
+            self.mp_correlation = correlation
+        if self.dyn is not None:
+            self.dyn.mp.fluid = self.bo
+            self.dyn.mp.correlation = self.mp_correlation
+            self.dyn.mp._last_P = None  # force a property re-evaluation
+        if self.mpfm is not None:
+            self.mpfm.set_true_fluid(self.bo)
+        if not msgs:
+            return
+        self.recompute()
+        self.events.add(self.time_s, "fluid", "Reservoir fluid changed: " + "; ".join(msgs),
+                        detail=("A GOR / water-cut change applies to fluid ENTERING the well and travels up with it; "
+                                "a re-characterisation (API, gas gravity, salinity) changes the properties everywhere at once."))
+        self._settle_pending = "fluid change"
+        self._settle_since = None
+        self._record_sample(force=True)
+
     def set_fluid(self, **kw: float) -> None:
+        if self.bo is not None:
+            raise InvalidOperatingInput("the three-phase fluid is active: change it with the black-oil inputs (GOR, water cut, API, gas gravity)")
         before = self._key_values()
         f = self.fluid
         new = ConstantPropertyLiquid(
@@ -504,7 +888,31 @@ class SimulationEngine:
         self._settle_since = None
 
     def _chemical_events(self) -> None:
-        for c, old, new in self.dyn.update_circuit_status():  # type: ignore[union-attr]
+        for c, old, new, route in self.dyn.update_circuit_status():  # type: ignore[union-attr]
+            if route == "annulus":
+                qa = float(self.dyn.net.Q[c.ann_link])  # type: ignore[union-attr, index]
+                if new == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection into the ANNULUS SERVICE LINE started: {qa * 3600 * 1000:.1f} L/h "
+                                    f"through {c.cfg.annulus_valve}", component=c.cfg.id)
+                elif old == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection into the annulus service line stopped ({new.replace('_', ' ')})",
+                                    component=c.cfg.id)
+                continue
+            if route.startswith("route:"):
+                r = next(x for x in c.routes if x.cfg.id == route[6:])
+                qr = float(self.dyn.net.Q[r.link])  # type: ignore[union-attr]
+                where = self.topology.nodes[r.inj_node].name
+                if new == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection through {r.cfg.valve} STARTED: {qr * 3600 * 1000:.1f} L/h entering "
+                                    f"the production stream at {where}", component=c.cfg.id)
+                elif old == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection through {r.cfg.valve} stopped ({new.replace('_', ' ')})",
+                                    component=c.cfg.id)
+                continue
             q = float(self.dyn.net.Q[c.inj_link])  # type: ignore[union-attr]
             if new == "injecting":
                 msg = (f"{c.cfg.name} injection STARTED: {q * 3600 * 1000:.1f} L/h entering the production stream at "
@@ -688,9 +1096,27 @@ class SimulationEngine:
             "last_event_id": self.events.last_id,
             "last_sample_seq": self.history.last_seq,
             "briefing": self.scenario.briefing,
+            "control_hydraulics": self.ctrl.snapshot() if self.ctrl is not None else None,
+            "fluid_model": self.fluid_model,
+            "multiphase": build_report(self) if self.bo is not None else None,
+            "sand_choke": (self.sand.snapshot() if self.sand is not None else
+                           {"available": False, "reason": "Sand production, detection and choke erosion need the three-phase "
+                            "(black-oil) fluid model and sand / choke inputs."}),
+            "mpfm": (self.mpfm.snapshot(self.time_s) if self.mpfm is not None else
+                     {"tag": self.scenario.mpfm.tag, "quality": "NOT_MODELLED",
+                      "reason": "The multiphase flow meter requires the three-phase (black-oil) fluid model."}
+                     if self.scenario.mpfm is not None else None),
         }
         if include_static:
             snap["layout"] = self.scenario.layout.model_dump()
+            snap["tag_aliases"] = {k: v.model_dump() for k, v in self.scenario.tag_aliases.items()}
+            snap["fluid_models"] = ["single_phase"] + (["black_oil"] if self.scenario.black_oil is not None else [])
+            si = self.sand_inputs
+            snap["sand_choke_inputs"] = si.model_dump() if si is not None else None
+            snap["sand_choke_example_available"] = self.scenario.sand_choke_example is not None
+            snap["erosion_materials"] = [{"key": m.key, "name": m.name, "k": m.k, "n": m.n, "density_kg_m3": m.density,
+                                          "behaviour": m.behaviour, "source": m.source} for m in MATERIALS.values()]
+            snap["schematic"] = get_schematic(self.scenario.schematic) if self.scenario.schematic else None
             snap["training_rules"] = self.scenario.training_rules.model_dump()
             snap["integrity_presets"] = [p.model_dump() for p in self.scenario.integrity_tests]
             snap["chemical_config"] = [
@@ -844,8 +1270,22 @@ class SimulationEngine:
                 "injection_point_pressure_pa": dyn.node_pressure(c.inj_node),
                 "isolation_valve": c.cfg.isolation_valve, "control_valve": c.cfg.control_valve, "check_valve": c.cfg.check_valve,
                 "pressure_transmitter": c.cfg.pressure_transmitter, "flow_transmitter": c.cfg.flow_transmitter,
-                "fully_mixed_concentration": qi / (q_prod) if q_prod > NO_FLOW_M3S and qi > 0 else 0.0,
+                "total_injection_m3s": dyn.total_injection(c),
+                "fully_mixed_concentration": (dyn.total_injection(c) / q_prod
+                                              if q_prod > NO_FLOW_M3S and dyn.total_injection(c) > 0 else 0.0),
+                "routes": [{
+                    "id": r.cfg.id, "name": r.cfg.name, "valve": r.cfg.valve, "check_valve": r.cfg.check_valve,
+                    "flow_transmitter": r.cfg.flow_transmitter, "injection_node": r.inj_node,
+                    "injection_node_name": self.topology.nodes[r.inj_node].name, "status": r.status,
+                    "flow_m3s": float(net.Q[r.link]), "cumulative_m3": r.cum_m3,
+                } for r in c.routes],
                 "cumulative_injected_m3": c.cum_injected_m3,
+                "annulus_route": None if c.ann_link is None else {
+                    "valve": c.cfg.annulus_valve, "check_valve": c.cfg.annulus_check_valve,
+                    "flow_transmitter": c.cfg.annulus_flow_transmitter, "status": c.ann_status,
+                    "flow_m3s": float(net.Q[c.ann_link]), "cumulative_m3": c.cum_to_annulus_m3,
+                    "junction_pressure_pa": float(net.P[net.links[c.ann_link].dn]),
+                },
                 "in_production_line_m3": float(dyn.grid.inventory()[c.k]),
                 "exported_m3": float(dyn.grid.out_boundary[c.k]),
                 "front_distance_m": front["front_distance_m"],

@@ -8,9 +8,30 @@ Each chemical (methanol, corrosion inhibitor, biocide, wax inhibitor) is an inde
 
 ```
 SUP_x (pump discharge @ SDU, fixed P) ──CL-30x umbilical line (5 km)──► N_x_IN [PT-30x]
-   ──CIV-30x isolation valve──► N_x_A ──CIMV-30x metering valve [FT-30x]──► N_x_B
+   ──CIMV-30x metering valve [FT-30x]──► N_x_A ──CIV-30x isolation valve──► N_x_B
    ──NRV-30x non-return valve (cracking P)──► injection node on the PRODUCTION path
 ```
+
+The metering valve is outboard and the isolation valve sits next to the bore, so the
+isolation valve, backed by the non-return valve, is the barrier between the chemical
+system and the production bore (as on the reference tree HMI: CCV, then CIV, then bore).
+
+**Methanol has a second route, into the annulus service line**, from the same pump:
+
+```
+SUP_MEOH_ANN ──CL-305 (12.7 mm, 5 km)──► N_MIV_IN ──MIV-301 [FT-305]──► N_MIV_A ──NRV-305──► N_ANN_SVC
+                                                     annulus service-line junction: AWV-101 (from the annulus),
+                                                     SLV-101 (service line to the host), NRV-305 (methanol)
+```
+
+With SLV-101 open, methanol flushes the service line to the host. With AWV-101 / AMV-101
+open (and SLV-101 closed), it bullheads into the A-annulus and raises the annulus pressure.
+Methanol sent this way is **accounted separately** (`annulus_route.cumulative_m3` in the
+snapshot; "to annulus system" in the Chemicals panel). It never enters the production-line
+transport grid, so the production mass balance stays exact. The composition of the
+annulus-system fluid itself is not tracked. If annulus fluid later returns to the production
+bore through the crossover valve, it is treated as annulus brine, and a diagnostic
+(`ANNULUS_COMPOSITION_UNTRACKED`) says so.
 
 | Chemical | Injection node (base scenario) | Downstream transmitters |
 |---|---|---|

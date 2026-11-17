@@ -1,4 +1,6 @@
 import { formatSimTime } from "@/lib/units";
+import { aliasText } from "@/lib/tags";
+import type { TagAlias } from "@/types/simulation";
 import { cn } from "@/lib/utils";
 import type { SimEvent } from "@/types/simulation";
 
@@ -23,8 +25,11 @@ export function EventLog({
   compact = false,
   limit,
   onTag,
+  aliases,
 }: {
   events: SimEvent[];
+  /** engineering tag -> display tag (reference numbering) */
+  aliases?: Record<string, TagAlias>;
   compact?: boolean;
   limit?: number;
   onTag?: (tag: string) => void;
@@ -63,10 +68,10 @@ export function EventLog({
                   onClick={onTag ? () => onTag(e.component!) : undefined}
                   className={cn("num mr-1.5 rounded bg-panel-3 px-1 text-[11.5px] font-semibold text-fg", onTag ? "hover:bg-accent/10 hover:text-accent" : "cursor-default")}
                 >
-                  {e.component}
+                  {aliases?.[e.component]?.tag ?? e.component}
                 </button>
               )}
-              {e.message}
+              {aliases ? aliasText({ tag_aliases: aliases }, e.message) : e.message}
               {!compact && e.detail && <span className="mt-0.5 block text-[12px] text-dim">{e.detail}</span>}
             </span>
           </li>

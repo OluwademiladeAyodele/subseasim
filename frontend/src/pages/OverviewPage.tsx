@@ -9,7 +9,10 @@ import { KeyMeasurements } from "@/instrumentation/KeyMeasurements";
 import { valveVisual, VALVE_LABEL } from "@/lib/stateColors";
 import { fmt } from "@/lib/units";
 import { cn } from "@/lib/utils";
+import { displayTag } from "@/lib/tags";
 import { TreeSchematic } from "@/schematic/TreeSchematic";
+import { XtSchematic } from "@/schematic/XtSchematic";
+import type { RouteId } from "@/app/routes";
 import type { RestrictionSnapshot } from "@/types/simulation";
 
 const VIS_TONE = { open: "ok", closed: "bad", partial: "warn", moving: "warn", fault: "fault" } as const;
@@ -73,7 +76,7 @@ function ValveStatus() {
           return (
             <li key={v.tag}>
               <button type="button" onClick={() => selectTag(v.tag)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-panel-2">
-                <span className="num w-[78px] text-[13px] font-semibold">{v.tag}</span>
+                <span className="num w-[86px] text-[13px] font-semibold" title={v.tag}>{displayTag(state, v.tag)}</span>
                 <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
                   <span className="absolute inset-y-0 left-0 rounded-full bg-flow transition-[width] duration-500" style={{ width: `${v.position_pct}%` }} />
                 </span>
@@ -93,11 +96,13 @@ function ValveStatus() {
 export function OverviewPage() {
   const { state, layout, selection, select, prefs, sim, selectTag, go } = useWorkstation();
   const dynamic = state.mode === "dynamic";
+  const [view, setView] = useState<"xt" | "system">("xt");
+  const xt = !!state.schematic && view === "xt";
   return (
     <PageBody>
       <KeyMeasurements state={state} prefs={prefs} onSelect={selectTag} />
       <Panel
-        title="Production system"
+        title={xt ? `Christmas tree workstation — ${state.schematic!.title}` : "Production system"}
         subtitle={
           dynamic
             ? "Click any component to inspect and operate it · scroll to zoom, drag to pan · ▲▼ rate of change · → ss = steady-state value a pressure is relaxing toward"
@@ -105,6 +110,16 @@ export function OverviewPage() {
         }
         right={
           <div className="flex items-center gap-2">
+            {state.schematic && (
+              <div className="flex overflow-hidden rounded-md border border-line text-[12px]" role="tablist" aria-label="Schematic view">
+                {([["xt", "Tree workstation"], ["system", "Full system"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
+                    className={view === k ? "bg-accent px-2.5 py-1 font-semibold text-white" : "px-2.5 py-1 text-muted hover:bg-panel-2"}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
             <Badge tone={dynamic ? "accent" : "neutral"}>{dynamic ? "Dynamic model" : "Steady model"}</Badge>
             <Badge tone="warn">{state.scenario.data_classification}</Badge>
           </div>
@@ -112,9 +127,15 @@ export function OverviewPage() {
         className="mt-4"
         bodyClassName="flex"
       >
-        <div className="mx-auto w-full max-w-[1500px]" style={{ aspectRatio: `${layout.width} / ${layout.height}` }}>
-          <TreeSchematic state={state} layout={layout} selection={selection} onSelect={select} prefs={prefs} />
-        </div>
+        {xt ? (
+          <div className="mx-auto w-full max-w-[1600px]" style={{ aspectRatio: `${state.schematic!.width} / ${state.schematic!.height}` }}>
+            <XtSchematic state={state} schematic={state.schematic!} selection={selection} onSelect={select} prefs={prefs} onNavigate={(p) => go(p as RouteId)} />
+          </div>
+        ) : (
+          <div className="mx-auto w-full max-w-[1500px]" style={{ aspectRatio: `${layout.width} / ${layout.height}` }}>
+            <TreeSchematic state={state} layout={layout} selection={selection} onSelect={select} prefs={prefs} />
+          </div>
+        )}
       </Panel>
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         {(sim.training || !!state.briefing?.length) && (
@@ -134,7 +155,7 @@ export function OverviewPage() {
           className="max-h-[420px]"
           bodyClassName="overflow-y-auto"
         >
-          <EventLog events={sim.events} compact limit={30} onTag={selectTag} />
+          <EventLog events={sim.events} compact limit={30} onTag={selectTag} aliases={state.tag_aliases} />
         </Panel>
         <ValveStatus />
       </div>

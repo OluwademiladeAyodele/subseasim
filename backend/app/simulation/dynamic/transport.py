@@ -201,6 +201,20 @@ class TransportGrid:
         self.T = self.amb.copy()
         # bookkeeping [m3 of chemical]
         self.injected = np.zeros(n_chem)
+        #: Multiphase (mass-based) mode: fluid content of each cell in
+        #: reference volumes, transported with the face flows so that
+        #: sum(c * M) is conserved exactly while the fluid compresses / expands.
+        self.mass_tracking = False
+        self.M = self.V.copy()
+        #: Content each cell must hold at the END of the next step (set by the
+        #: multiphase coupling from the new pressures). The face flows are then
+        #: reconstructed from the inlet flow so that every cell's change of
+        #: content is exactly the fluid it gained - consistent, conservative.
+        self.M_target: np.ndarray | None = None
+        #: Concentration of the fluid entering at the reservoir / boundary end.
+        self.c_left = np.zeros(n_chem)
+        self.c_right = np.zeros(n_chem)
+        self.in_boundary = np.zeros(n_chem)
         self.out_boundary = np.zeros(n_chem)
         self.out_reservoir = np.zeros(n_chem)
         self.dT_throttle = np.zeros(self.n + 1)
@@ -216,8 +230,12 @@ class TransportGrid:
         self.F = self.face_flows(Q)
         return self.F
 
-    def throttle(self, F: np.ndarray, P: np.ndarray, rho: float, cp: float, beta: float) -> np.ndarray:
-        """Temperature rise of fluid crossing each face in its flow direction."""
+    def throttle(self, F: np.ndarray, P: np.ndarray, rho: float, cp: float, beta: float,
+                 link_props: dict[int, tuple[float, float, float]] | None = None) -> np.ndarray:
+        """Temperature rise of fluid crossing each face in its flow direction.
+
+        ``link_props`` (multiphase): per restriction link (rho, cp, beta) of
+        the upstream mixture, overriding the scalar properties."""
         net = self.layout.network
         dT = np.zeros(self.n + 1)
         parts: dict[int, dict[int, float]] = {}
@@ -231,7 +249,8 @@ class TransportGrid:
             for li in self.face_restr[fi]:
                 dp = P[net.up[li]] - P[net.dn[li]]
                 loss = dp if forward else -dp
-                pf[li] = (1.0 - beta * t_up) * max(loss, 0.0) / (rho * cp)
+                r_, c_, b_ = link_props[li] if link_props and li in link_props else (rho, cp, beta)
+                pf[li] = (1.0 - b_ * t_up) * max(loss, 0.0) / (r_ * c_)
             parts[fi] = pf
             dT[fi] = sum(pf.values())
         self.dT_throttle = dT
@@ -245,7 +264,7 @@ class TransportGrid:
 
     # ------------------------------------------------------------------ step
     def step(self, dt: float | None, F: np.ndarray, dT_face: np.ndarray, injections: list[tuple[int, int, float, float, float]],
-             T_res: float, T_bnd: float, rhocp: float) -> None:
+             T_res: float, T_bnd: float, rhocp: float, thermal: bool = True) -> None:
         """Advance by dt (None -> steady state).
 
         injections: (chem index, cell index, Q_inj [m3/s], T_inj [K], (rho cp)_inj).
@@ -265,23 +284,51 @@ class TransportGrid:
             inj_q[ci] += w
             inj_qt[ci] += w * t_inj
             self.injected[k] += q * dt
+        mt = self.mass_tracking
+        if mt and self.M_target is not None:
+            dm = (self.M_target - self.M) / dt
+            net_src = src_c.sum(axis=0) - dm
+            Fr = np.empty_like(F)
+            if F[0] >= 0 or F[-1] >= 0:
+                Fr[0] = F[0]
+                Fr[1:] = F[0] + np.cumsum(net_src)
+            else:  # reverse flow: anchor at the boundary end
+                Fr[-1] = F[-1]
+                Fr[:-1] = F[-1] - np.cumsum(net_src[::-1])[::-1]
+            F = Fr
+            self.F_mass = Fr
         inL = np.maximum(F[:-1], 0.0)
         inR = np.maximum(-F[1:], 0.0)
         loss = self.ua / rhocp
-        vth = self.V + self.mass / rhocp  # thermal "volume" incl. solid heat capacity
-        rate = np.maximum((inL + inR + src_c.sum(axis=0)) / self.V, (inL + inR + inj_q + loss) / vth)
+        Vc = self.M if mt else self.V
+        vth = Vc + self.mass / rhocp  # thermal "volume" incl. solid heat capacity
+        rate = (inL + inR + src_c.sum(axis=0)) / Vc
+        if thermal:
+            rate = np.maximum(rate, (inL + inR + inj_q + loss) / vth)
         nsub = max(1, math.ceil(dt * float(rate.max()) / MAX_COURANT))
         h = dt / nsub
         c = self.c
         T = self.T
+        M = self.M
+        cl, cr = self.c_left[:, None], self.c_right[:, None]
+        src_tot = src_c.sum(axis=0)
         for _ in range(nsub):
             # concentration (conservative)
-            ext = np.concatenate([np.zeros((self.n_chem, 1)), c, np.zeros((self.n_chem, 1))], axis=1)
+            ext = np.concatenate([cl, c, cr], axis=1)
             cf = np.where(F >= 0.0, ext[:, :-1], ext[:, 1:])
             flux = F * cf
-            c = c + h * (flux[:, :-1] - flux[:, 1:] + src_c) / self.V
+            if mt:
+                m_new = np.maximum(M + h * (F[:-1] - F[1:] + src_tot), 1e-12)
+                c = (c * M + h * (flux[:, :-1] - flux[:, 1:] + src_c)) / m_new
+                M = m_new
+                vth = M + self.mass / rhocp
+            else:
+                c = c + h * (flux[:, :-1] - flux[:, 1:] + src_c) / self.V
             self.out_boundary += h * np.maximum(flux[:, -1], 0.0)
             self.out_reservoir += h * np.maximum(-flux[:, 0], 0.0)
+            self.in_boundary += h * (np.maximum(flux[:, 0], 0.0) + np.maximum(-flux[:, -1], 0.0))
+            if not thermal:
+                continue
             # temperature (advective)
             Tl = np.concatenate([[T_res], T[:-1]]) + dT_face[:-1]
             Tr = np.concatenate([T[1:], [T_bnd]]) + dT_face[1:]
@@ -289,6 +336,8 @@ class TransportGrid:
             T = T + h * dTdt
         self.c = np.clip(c, 0.0, 1.0)
         self.T = T
+        if mt:
+            self.M = M
 
     def _steady(self, F, dT_face, injections, T_res, T_bnd, rhocp) -> None:
         n = self.n
@@ -310,11 +359,11 @@ class TransportGrid:
         for i in order:
             if forward:
                 fin = max(F[i], 0.0)
-                c_up = c[:, i - 1] if i > 0 else np.zeros(self.n_chem)
+                c_up = c[:, i - 1] if i > 0 else self.c_left
                 t_up = (T[i - 1] if i > 0 else T_res) + dT_face[i]
             else:
                 fin = max(-F[i + 1], 0.0)
-                c_up = c[:, i + 1] if i < n - 1 else np.zeros(self.n_chem)
+                c_up = c[:, i + 1] if i < n - 1 else self.c_right
                 t_up = (T[i + 1] if i < n - 1 else T_bnd) + dT_face[i + 1]
             qin = fin + src_c[:, i].sum()
             c[:, i] = (fin * c_up + src_c[:, i]) / qin if qin > 0 else 0.0
@@ -376,4 +425,4 @@ class TransportGrid:
         return cells[-1]
 
     def inventory(self) -> np.ndarray:
-        return (self.c * self.V).sum(axis=1)
+        return (self.c * (self.M if self.mass_tracking else self.V)).sum(axis=1)

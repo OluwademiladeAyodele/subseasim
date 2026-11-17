@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/primitives";
+import { displayTag } from "@/lib/tags";
 import { valveVisual, VALVE_LABEL } from "@/lib/stateColors";
 import { type DisplayPrefs, fmt, instrumentDisplay, paToBarDelta } from "@/lib/units";
 import type { InstrumentStatus, RestrictionSnapshot, SimulationState } from "@/types/simulation";
@@ -61,7 +62,10 @@ export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationS
               : nodeName(i.node);
         return (
           <tr key={i.tag} className="cursor-pointer hover:bg-panel-3/60" onClick={() => onSelect?.(i.tag)} data-testid={`row-${i.tag}`}>
-            <td className={`${td} num font-bold`}>{i.tag}</td>
+            <td className={`${td} num font-bold`} title={i.tag}>
+              {displayTag(state, i.tag)}
+              {displayTag(state, i.tag) !== i.tag && <span className="ml-1 text-[11px] font-normal text-dim">{i.tag}</span>}
+            </td>
             <td className={`${td} text-muted`}>{i.description}</td>
             <td className={`${td} text-muted`}>{loc}</td>
             <td className={`${td} num text-right text-[13px] text-fg`}>{fmt(d.value, d.digits)}</td>

@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
-EventCategory = Literal["operation", "lifecycle", "boundary", "fluid", "outcome", "training_rule", "rejected", "training", "scenario", "chemical", "integrity", "valve", "process"]
+EventCategory = Literal["operation", "lifecycle", "boundary", "fluid", "outcome", "training_rule", "rejected", "training", "scenario", "chemical", "integrity", "valve", "process", "alarm", "hydraulics", "instrument"]
 SimStatus = Literal["ready", "running", "paused"]
 
 

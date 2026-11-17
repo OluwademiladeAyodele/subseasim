@@ -5,19 +5,26 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.api.schemas import (
+    BlackOilUpdate,
     BoundaryUpdate,
+    FastForwardRequest,
+    FluidModelRequest,
+    MPFMFaultRequest,
     CreateSessionRequest,
     FluidUpdate,
     IntegrityTestRequest,
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    SelectorCommandRequest,
+    SupplyRequest,
     LoadScenarioRequest,
     SpeedRequest,
     TrainingAnswerRequest,
     TrainingStartRequest,
     ValveCommandRequest,
 )
+from app.models.sand import SandChokeInputs
 from app.scenarios.loader import ScenarioNotFound, get_scenario, list_scenarios
 from app.sessions import Session, SessionLimitReached, manager
 from app.simulation.components.elements import CommandRejected
@@ -43,7 +50,13 @@ async def _after_change(s: Session) -> dict:
 
 @router.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "simulated": True, "sessions": len(manager.sessions)}
+    m = manager.metrics
+    return {
+        "status": "ok", "simulated": True, "sessions": len(manager.sessions),
+        "running": m["running"], "sockets": m["sockets"],
+        "tick_ms": round(m["tick_ms"], 1), "tick_ms_max": round(m["tick_ms_max"], 1),
+        "loop_period_s": round(m["real_period_s"], 3),
+    }
 
 
 @router.get("/scenarios")
@@ -177,9 +190,41 @@ async def load_scenario(sid: str, req: LoadScenarioRequest) -> dict:
     return await _reinit(s)
 
 
+def _resolve_tag(s: Session, tag: str) -> str:
+    """Accept the engineering tag or its display alias (reference HMI tag)."""
+    if tag in s.engine.restrictions:
+        return tag
+    for eng, alias in s.engine.scenario.tag_aliases.items():
+        if alias.tag == tag:
+            return eng
+    return tag
+
+
+@router.post("/sessions/{sid}/hydraulics/selectors/{tag}")
+async def selector_command(sid: str, tag: str, req: SelectorCommandRequest) -> dict:
+    s = _session(sid)
+    tag = _resolve_tag(s, tag)
+    try:
+        s.engine.command_selector(tag, req.command)
+    except CommandRejected as exc:
+        raise HTTPException(404 if "unknown" in str(exc) else 409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/hydraulics/supplies/{supply_id}")
+async def hydraulic_supply(sid: str, supply_id: str, req: SupplyRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_hydraulic_supply(supply_id, req.available)
+    except CommandRejected as exc:
+        raise HTTPException(404, str(exc)) from None
+    return await _after_change(s)
+
+
 @router.post("/sessions/{sid}/valves/{tag}")
 async def valve_command(sid: str, tag: str, req: ValveCommandRequest) -> dict:
     s = _session(sid)
+    tag = _resolve_tag(s, tag)
     if tag not in s.engine.restrictions:
         raise HTTPException(404, f"valve {tag!r} not found")
     try:
@@ -211,6 +256,76 @@ async def fluid(sid: str, req: FluidUpdate) -> dict:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
     return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/black-oil")
+async def black_oil(sid: str, req: BlackOilUpdate) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_black_oil(**req.model_dump())
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    except InvalidOperatingInput as exc:
+        raise HTTPException(422, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/sand-choke/inputs")
+async def sand_inputs(sid: str, req: SandChokeInputs) -> dict:
+    s = _session(sid)
+    s.engine.set_sand_inputs(req)
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/example")
+async def sand_example(sid: str) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.load_sand_example()
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/fast-forward")
+async def sand_fast_forward(sid: str, req: FastForwardRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.sand_fast_forward(req.days)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/mpfm/faults")
+async def mpfm_faults(sid: str, req: MPFMFaultRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_mpfm_faults(**req.model_dump())
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/mpfm/calibrate")
+async def mpfm_calibrate(sid: str) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.calibrate_mpfm()
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/fluid-model")
+async def fluid_model(sid: str, req: FluidModelRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_fluid_model(req.model)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    s.training = None if s.training is None else type(s.training)(s.training.d)
+    return await _reinit(s)
 
 
 @router.post("/sessions/{sid}/training/start")

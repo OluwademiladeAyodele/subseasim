@@ -7,7 +7,7 @@ import { EVENT_STYLE, EventLog } from "@/dashboard/EventLog";
 import { cn } from "@/lib/utils";
 
 export function EventsPage() {
-  const { sim, selectTag } = useWorkstation();
+  const { sim, selectTag, state } = useWorkstation();
   const [q, setQ] = useState("");
   const [cats, setCats] = useState<Set<string>>(new Set());
   const present = useMemo(() => [...new Set(sim.events.map((e) => e.category))], [sim.events]);
@@ -58,7 +58,7 @@ export function EventsPage() {
         )}
       </div>
       <div className="overflow-hidden rounded-xl border border-line bg-panel shadow-[var(--shadow-card)]">
-        <EventLog events={list} onTag={selectTag} />
+        <EventLog events={list} onTag={selectTag} aliases={state.tag_aliases} />
       </div>
     </PageBody>
   );

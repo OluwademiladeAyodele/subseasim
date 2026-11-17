@@ -11,6 +11,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.sand import SandChokeInputs
+
 Positive = Annotated[float, Field(gt=0)]
 NonNeg = Annotated[float, Field(ge=0)]
 Percent = Annotated[float, Field(ge=0, le=100)]
@@ -36,6 +38,80 @@ class FluidConfig(_Strict):
     #: Used ONLY by the dynamic model (line-pack, pressure build-up, wave
     #: speed). The quasi-steady model treats the liquid as incompressible.
     compressibility_1_bar: Annotated[float, Field(gt=0, lt=1e-2)] = 7.0e-5
+
+
+class BlackOilConfig(_Strict):
+    """Three-phase black-oil fluid (oil, gas, water) - generic correlations.
+
+    See docs/MULTIPHASE_FLOW_MODEL.md for the correlations, their data ranges
+    and limitations. Values are ILLUSTRATIVE unless taken from a PVT report."""
+
+    name: str
+    oil_api: Annotated[float, Field(ge=10, le=70)]
+    gas_specific_gravity: Annotated[float, Field(ge=0.55, le=1.5)]
+    #: Producing gas-oil ratio at standard conditions (15 C, 1.01325 bar).
+    producing_gor_sm3_sm3: Annotated[float, Field(ge=0, le=2000)]
+    #: Water cut at standard conditions, fraction of liquid.
+    water_cut_fraction: Annotated[float, Field(ge=0, le=0.98)]
+    water_salinity_wt_pct: Annotated[float, Field(ge=0, le=26)] = 3.5
+    oil_specific_heat_j_kgk: Annotated[float, Field(gt=500, lt=5000)] = 2100.0
+    gas_specific_heat_j_kgk: Annotated[float, Field(gt=500, lt=5000)] = 2300.0
+    water_specific_heat_j_kgk: Annotated[float, Field(gt=2000, lt=5000)] = 4100.0
+    gas_cp_cv: Annotated[float, Field(gt=1.05, lt=1.67)] = 1.27
+    #: Multiphase pressure-gradient correlation.
+    correlation: Literal["beggs_brill", "no_slip"] = "beggs_brill"
+
+
+class MPFMMeterPVT(_Strict):
+    """Fluid characterisation programmed into the meter's flow computer
+    (normally from the last sample / well test). May differ from the true
+    fluid - a source of systematic measurement error."""
+
+    oil_api: Annotated[float, Field(ge=10, le=70)] | None = None
+    gas_specific_gravity: Annotated[float, Field(ge=0.55, le=1.5)] | None = None
+    water_salinity_wt_pct: Annotated[float, Field(ge=0, le=26)] | None = None
+    producing_gor_sm3_sm3: Annotated[float, Field(ge=0, le=2000)] | None = None
+    water_cut_fraction: Annotated[float, Field(ge=0, le=0.98)] | None = None
+
+
+class MPFMConfig(_Strict):
+    """Virtual multiphase flow meter - a REPRESENTATIVE venturi + dual-energy
+    gamma meter (not any manufacturer's algorithm). See
+    docs/MPFM_MEASUREMENT_MODEL.md."""
+
+    tag: str
+    name: str = "Multiphase flow meter"
+    #: Production-path node where the meter is installed.
+    location_node: str
+    inlet_diameter_m: Annotated[float, Field(gt=0.02, lt=0.6)] = 0.1016
+    beta: Annotated[float, Field(gt=0.3, lt=0.8)] = 0.5
+    discharge_coefficient: Annotated[float, Field(gt=0.8, le=1.0)] = 0.995
+    dp_min_bar: Positive = 0.02
+    dp_max_bar: Positive = 5.0
+    #: Upper GVF of the specified operating envelope.
+    gvf_max: Annotated[float, Field(gt=0.5, lt=1.0)] = 0.96
+    pressure_sigma_bar: NonNeg = 0.05
+    temperature_sigma_k: NonNeg = 0.2
+    #: dP transmitter noise, % of the dP upper range (1 sigma).
+    dp_sigma_pct_full_scale: NonNeg = 0.05
+    gamma_count_rate_low_cps: Positive = 2.0e5
+    gamma_count_rate_high_cps: Positive = 5.0e4
+    integration_time_s: Positive = 10.0
+    update_interval_s: Positive = 2.0
+    #: Slip model used by the flow computer.
+    meter_slip_model: Literal["chisholm", "homogeneous"] = "chisholm"
+    meter_pvt: MPFMMeterPVT = Field(default_factory=MPFMMeterPVT)
+    #: 1-sigma relative uncertainty of the meter's PVT densities / volume factors [%].
+    pvt_uncertainty_pct: NonNeg = 1.5
+    #: 1-sigma relative uncertainty of the discharge coefficient [%].
+    cd_uncertainty_pct: NonNeg = 0.5
+    #: Slip / flow-regime model uncertainty (1 sigma, % of total flow) vs GVF.
+    slip_uncertainty_table: list[tuple[float, float]] = Field(
+        default_factory=lambda: [(0.0, 0.3), (0.5, 1.5), (0.8, 3.0), (0.9, 5.0), (0.95, 8.0), (0.99, 20.0)])
+    calibration_interval_days: Positive = 180.0
+    #: Gradual change of the real discharge coefficient (erosion / deposits) [% per year].
+    cd_drift_pct_per_year: float = 0.0
+    seed: int = 1
 
 
 class ReservoirConfig(_Strict):
@@ -118,7 +194,10 @@ class PipeElementConfig(_ElementBase):
 class ValveElementConfig(_ElementBase):
     type: Literal["valve"]
     tag: str
-    valve_type: Literal["scssv", "master", "wing", "isolation", "annulus_master", "annulus_wing", "crossover", "injection_isolation"]
+    valve_type: Literal[
+        "scssv", "master", "wing", "swab", "isolation", "annulus_master", "annulus_wing", "crossover",
+        "service_line", "injection_isolation",
+    ]
     bore_diameter_m: Annotated[float, Field(gt=0.005, lt=2.0)]
     #: Resistance coefficient when fully open (dP = K rho v^2/2, v in bore).
     loss_coefficient_open: Positive
@@ -255,6 +334,9 @@ class LayoutConfig(_Strict):
     waypoints: dict[str, list[LayoutPoint]] = Field(default_factory=dict)
     instruments: dict[str, LayoutPoint] = Field(default_factory=dict)
     annotations: list[dict] = Field(default_factory=list)
+    #: Where along its drawn line a valve / choke symbol sits (0..1, default
+    #: 0.5). Presentation only.
+    symbol_fraction: dict[str, Annotated[float, Field(ge=0, le=1)]] = Field(default_factory=dict)
 
 
 class ReservoirTransientConfig(_Strict):
@@ -325,6 +407,25 @@ class PumpConfig(_Strict):
     max_discharge_pressure_bara: Annotated[float, Field(gt=1, lt=2000)] = 690.0
 
 
+class ChemicalRouteConfig(_Strict):
+    """Additional injection route from the same chemical pump into the
+    PRODUCTION path (e.g. methanol injection valves upstream and downstream
+    of the production wing valve). Chemical carried by a route is tracked by
+    the production transport model exactly like the main injection point."""
+
+    id: str
+    name: str
+    #: Subsystem boundary node at the subsea distribution unit (same pump).
+    supply_node: str
+    #: Isolation valve tag of the route.
+    valve: str
+    #: Non-return valve tag; it must discharge into ``injection_node``.
+    check_valve: str
+    #: Production-path node the route injects into.
+    injection_node: str
+    flow_transmitter: str | None = None
+
+
 class ChemicalConfig(_Strict):
     id: str
     name: str
@@ -337,6 +438,15 @@ class ChemicalConfig(_Strict):
     check_valve: str | None = None
     pressure_transmitter: str | None = None
     flow_transmitter: str | None = None
+    #: Optional second route from the same pump into the ANNULUS service line
+    #: (methanol for service-line flushing / annulus bullheading): its own
+    #: supply node, isolation valve, non-return valve and flow transmitter.
+    annulus_supply_node: str | None = None
+    annulus_valve: str | None = None
+    annulus_check_valve: str | None = None
+    annulus_flow_transmitter: str | None = None
+    #: Further injection routes into the production path (same pump).
+    routes: list[ChemicalRouteConfig] = Field(default_factory=list)
     pump: PumpConfig
     #: Temperature of the chemical as it enters the production stream.
     injection_temperature_c: float = 4.0
@@ -394,6 +504,76 @@ class DynamicsConfig(_Strict):
     default_response: dict[str, InstrumentResponseConfig] = Field(default_factory=dict)
 
 
+class TagAliasConfig(_Strict):
+    """Display tag shown on the workstation for an engineering tag. The
+    engineering tag stays the stable identifier used by the model, the API,
+    tests and training exercises; the alias reproduces the tag numbering of
+    a reference control-system page."""
+
+    tag: str
+    #: verified    - read confidently from the reference
+    #: uncertain   - partly legible on the reference; check against the P&ID
+    #: placeholder - not legible / not shown with a tag; editable placeholder
+    #: addition    - SubseaSim component that is NOT on the reference page
+    status: Literal["verified", "uncertain", "placeholder", "addition"] = "verified"
+    note: str = ""
+
+
+class HydraulicSupplyConfig(_Strict):
+    """Hydraulic power supply from the topside HPU through the umbilical
+    (e.g. LP for tree valves, HP for the SCSSV)."""
+
+    id: str
+    name: str
+    #: Supply pressure transmitter tag (engineering tag).
+    tag: str
+    pressure_bara: Annotated[float, Field(gt=1, lt=1500)]
+    #: Below this header pressure the actuators it serves can no longer be
+    #: held open: fail-safe valves close [bara].
+    minimum_operating_pressure_bara: Annotated[float, Field(gt=1, lt=1500)]
+    available: bool = True
+
+
+class HydraulicHeaderConfig(_Strict):
+    """Hydraulic header inside a subsea control module (SCM), fed from one
+    supply through a selector valve."""
+
+    id: str
+    name: str
+    #: Header pressure transmitter tag (engineering tag).
+    tag: str
+    supply: str
+    scm: str = ""
+    #: First-order charge time constant with the selector valve open [s].
+    charge_time_constant_s: Positive = 15.0
+    #: First-order bleed-down time constant when isolated from the supply
+    #: (pilot consumption and leakage to return) [s].
+    bleed_time_constant_s: Positive = 900.0
+
+
+class SelectorValveConfig(_Strict):
+    tag: str
+    name: str
+    header: str
+    stroke_time_s: Positive = 4.0
+    initial_open: bool = True
+
+
+class ControlHydraulicsConfig(_Strict):
+    """Simplified subsea control hydraulics: supplies -> selector valves ->
+    SCM headers -> valve actuators. Lumped first-order header pressures; no
+    individual actuator volumes, pilot valves or umbilical transients."""
+
+    supplies: list[HydraulicSupplyConfig]
+    headers: list[HydraulicHeaderConfig]
+    selector_valves: list[SelectorValveConfig]
+    #: Valve tag -> supply id whose headers power its actuator.
+    valve_supply: dict[str, str] = Field(default_factory=dict)
+    #: Valves that close (spring return) when their supply is lost; the
+    #: others (e.g. stepping-actuator chokes, metering valves) fail as-is.
+    fail_safe_close: list[str] = Field(default_factory=list)
+
+
 class ScenarioConfig(_Strict):
     id: str
     name: str
@@ -416,3 +596,27 @@ class ScenarioConfig(_Strict):
     #: Briefing notes shown to the intern (operation to try, what to
     #: watch). Text only; every response is calculated by the model.
     briefing: list[str] = Field(default_factory=list)
+    #: Three-phase black-oil fluid (used when fluid_model = "black_oil").
+    black_oil: BlackOilConfig | None = None
+    #: Default fluid model: single-phase constant-property liquid (simplified,
+    #: Release 1) or three-phase black oil with multiphase flow.
+    fluid_model: Literal["single_phase", "black_oil"] = "single_phase"
+    #: Sand production / detection / choke-erosion INPUTS (site data; missing = unavailable).
+    sand_choke: SandChokeInputs | None = None
+    #: Complete ILLUSTRATIVE input set for training ("load example" in the app).
+    sand_choke_example: SandChokeInputs | None = None
+    #: Virtual multiphase flow meter (three-phase fluid model only).
+    mpfm: MPFMConfig | None = None
+    #: Engineering tag -> display tag (reference HMI numbering).
+    tag_aliases: dict[str, TagAliasConfig] = Field(default_factory=dict)
+    #: Subsea control hydraulics (selector valves, SCM headers, fail-safe).
+    control_hydraulics: ControlHydraulicsConfig | None = None
+    #: Id of a separate engineering-workstation schematic layout
+    #: (``app/scenarios/layouts/<id>.json``). Positions only - no physics.
+    schematic: str | None = None
+
+    @model_validator(mode="after")
+    def _black_oil_present(self):
+        if self.fluid_model == "black_oil" and self.black_oil is None:
+            raise ValueError("fluid_model 'black_oil' requires a black_oil fluid configuration")
+        return self

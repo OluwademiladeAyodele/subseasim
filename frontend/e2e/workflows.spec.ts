@@ -16,7 +16,8 @@ async function nav(page: Page, name: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("connection").first()).toHaveText("live");
+  // three-phase sessions take longer to create (PVT + steady multiphase march)
+  await expect(page.getByTestId("connection").first()).toHaveText("live", { timeout: 15_000 });
 });
 
 // Leave no session running at high speed behind (keeps the shared backend responsive).
@@ -85,7 +86,7 @@ test("reservoir pressure change propagates over simulated time", async ({ page }
   await nav(page, "Conditions");
   await page.getByLabel("Reservoir pressure").fill("420");
   await page.getByRole("button", { name: "Apply conditions" }).click();
-  await nav(page, "Process overview");
+  await nav(page, "Christmas tree");
   // the steady-state target moves at once; the actual flow follows as the
   // pressure change diffuses through the reservoir (simulated hours)
   const target = async () => parseFloat((await page.getByTestId("kpi-flow").innerText()).match(/heading to ([\d.]+)/)?.[1] ?? "0");
@@ -137,4 +138,71 @@ test("trends can be expanded, stepped through and closed", async ({ page }) => {
   await expect(focus).toBeHidden();
   await page.getByTestId("chart-temperature").locator(".recharts-surface").dblclick();
   await expect(page.getByTestId("trend-focus").getByRole("heading", { level: 2 })).toContainText("Temperature");
+});
+
+test("Christmas tree workstation: reference layout, valve and selector-valve operation", async ({ page }) => {
+  const xt = page.getByTestId("xt-schematic");
+  await expect(xt).toBeVisible();
+  await expect(xt.getByText("PMV3004")).toBeVisible();
+  await startFast(page, "60");
+  // operate the wing valve from the schematic: the tree cavity transmitter responds
+  const cavity = async () => parseFloat(((await page.getByTestId("inst-PT-104").textContent()) ?? "").replace(/[^\d.]/g, ""));
+  const p0 = await cavity();
+  await page.getByTestId("valve-PWV-101").click();
+  await page.getByTestId("component-panel").getByRole("button", { name: /^close$/i }).click();
+  await expect.poll(cavity, { timeout: 30_000 }).toBeGreaterThan(p0 + 5);
+  // selector valve: isolate SCM A from the LP supply; its header bleeds down
+  await page.getByTestId("selector-SEL-LP-A").click();
+  await expect(page.getByTestId("hydraulics-panel")).toBeVisible();
+  await page.getByRole("button", { name: "SEL-LP-A close" }).click();
+  await expect(page.getByTestId("selector-state")).toHaveText(/CLOSED/, { timeout: 20_000 });
+  const lpA = async () => parseFloat((await page.getByTestId("hyd-LP-A").locator("text").nth(1).textContent()) ?? "NaN");
+  await expect.poll(lpA, { timeout: 30_000 }).toBeLessThan(200);
+  await page.keyboard.press("Escape");
+});
+
+test("three-phase production: phase rates, water-cut change, flow patterns", async ({ page }) => {
+  await nav(page, "Multiphase flow");
+  await expect(page.getByTestId("multiphase-page")).toBeVisible();
+  const wcTile = page.getByTestId("mp-oil-Entering the well (sandface)").locator("xpath=..").getByText(/WC/);
+  await expect(wcTile).toContainText("WC 30.0 %");
+  await expect(page.getByTestId("pattern-strip")).toBeVisible();
+  await startFast(page, "60");
+  const wc = page.getByLabel("Water cut");
+  await wc.fill("50");
+  await page.getByRole("button", { name: "Apply fluid" }).click();
+  // the composition entering the well changes at once; the manifold still sees the old fluid
+  await expect(wcTile).toContainText("WC 50.0 %", { timeout: 15_000 });
+  await expect(page.getByTestId("mp-balance")).toContainText("Surface gas");
+});
+
+test("MPFM: measured vs true, fault injection and calibration", async ({ page }) => {
+  await page.getByTestId("mpfm-symbol").click();
+  await expect(page.getByTestId("mpfm-summary")).toBeVisible();
+  await page.getByRole("button", { name: "Open MPFM monitoring" }).click();
+  await expect(page.getByTestId("mpfm-page")).toBeVisible();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("GOOD");
+  await startFast(page, "60");
+  await page.getByRole("button", { name: "Gamma detector failed inject" }).click();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("BAD", { timeout: 15_000 });
+  await page.getByRole("button", { name: "Gamma detector failed clear" }).click();
+  await page.getByTestId("mpfm-calibrate").click();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("GOOD", { timeout: 15_000 });
+  await expect(page.getByTestId("mpfm-std-oil_sm3_d")).toContainText("±");
+});
+
+test("sand & choke: inputs drive the prediction, choke health and fast-forward", async ({ page }) => {
+  await nav(page, "Choke health");
+  await expect(page.getByTestId("health-category")).toHaveText("Unavailable");
+  await expect(page.getByTestId("unavailable")).toBeVisible();
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-max-hole")).toHaveValue("1.5", { timeout: 15_000 });
+  await nav(page, "Choke health");
+  await expect(page.getByTestId("health-category")).not.toHaveText("Unavailable", { timeout: 15_000 });
+  await expect(page.getByTestId("confidence")).toContainText("screening");
+  await page.getByTestId("fast-forward").click();
+  await expect(page.getByTestId("criterion-hole")).toBeVisible();
+  await nav(page, "Sand monitoring");
+  await expect(page.getByTestId("risk-index")).toBeVisible();
 });

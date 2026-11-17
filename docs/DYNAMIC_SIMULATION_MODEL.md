@@ -85,6 +85,8 @@ The dynamic state is initialised from the steady operating point of the scenario
 | Thermal mixing, heat loss, throttling | Energy equation on the transport grid |
 | Annulus pressure behaviour | Annulus network + lumped annulus temperature (thermal APB) |
 | Valve dead time, travel, seat leakage | Actuator model + leak capacity when closed |
+| Swab valve and tree cap | Normally closed valve above the tree cavity with its own cap volume and PT-105 (swab valve inflow and stroke tests) |
+| Annulus service line valve, methanol into the service line | SLV-101 on the service line at the junction where MIV-301 / NRV-305 deliver methanol (flushing to host or annulus bullheading) |
 | Instrument lag / update interval / resolution | Instrument response model (after the process dynamics) |
 
 ## 5. Valve movement versus process response

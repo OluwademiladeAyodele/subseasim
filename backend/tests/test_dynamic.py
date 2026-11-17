@@ -574,3 +574,65 @@ def test_analyser_update_interval_holds_output():
         e.advance(1.0)
         vals.append(e.readings["AT-510"].value)
     assert len(set(vals)) <= 2  # 30 s sample-and-hold
+
+
+# =================================================== tree: swab, SLV, MIV
+def test_swab_valve_isolates_tree_cap_until_opened():
+    e = eng()
+    cap0 = pv(e, "PT-105")
+    assert cap0 == pytest.approx(u.bara_to_pa(60.0), abs=0.2e5)  # cap held at its own pressure
+    run_until(e, 300.0)
+    assert pv(e, "PT-105") == pytest.approx(cap0, abs=0.1e5)  # tight SV: no change
+    e.command_valve("SV-101", "open")
+    run_until(e, 360.0)
+    assert pv(e, "PT-105") == pytest.approx(pv(e, "PT-104"), abs=0.2e5)  # equalised with the bore
+    assert any(x.category == "training_rule" and "SV-101" in x.message for x in e.events.all())  # opened against dP
+
+
+def test_swab_valve_inflow_test_passes_when_tight():
+    e = eng()
+    # the monitoring transmitter must sit inside the isolated test volume
+    with pytest.raises(CommandRejected, match="does not measure inside"):
+        e.start_integrity_test(type="inflow", transmitter="PT-104", test_node="N_SWAB_CAP")
+    e2 = eng()
+    e2.start_integrity_test(type="inflow", transmitter="PT-105", stabilisation_s=60, duration_s=300, max_change_bar=3)
+    run_until(e2, 420.0)
+    assert e2.integrity.tests[-1].phase == "passed"
+
+
+def test_service_line_valve_controls_annulus_bleed():
+    e = eng()
+    e.command_valve("SLV-101", "close")
+    e.command_valve("AMV-101", "open")
+    e.command_valve("AWV-101", "open")
+    run_until(e, 600.0)
+    p_closed = pv(e, "PT-401")
+    assert p_closed > u.bara_to_pa(60.0)  # SLV closed: no bleed to the host
+    e.command_valve("SLV-101", "open")
+    run_until(e, 3600.0)
+    assert pv(e, "PT-401") < p_closed - 10e5  # bleeding through the service line
+
+
+def test_methanol_into_annulus_service_line_is_accounted_separately():
+    e = eng()
+    e.command_valve("MIV-301", "open")
+    run_until(e, 1800.0)
+    c = next(x for x in e.snapshot(False)["chemicals"] if x["id"] == "methanol")
+    route = c["annulus_route"]
+    assert route["status"] == "injecting" and route["flow_m3s"] > 0 and route["cumulative_m3"] > 0.1
+    # production route untouched (a trapped line segment may decompress by picolitres through the NRV)
+    assert c["status"] == "isolated" and c["cumulative_injected_m3"] < 1e-9
+    b = e.snapshot(False)["transport_balance"]["methanol"]
+    assert b["injected_m3"] < 1e-9 and b["in_line_m3"] < 1e-9  # production line stays clean
+    assert e.readings["FT-305"].pv == pytest.approx(route["flow_m3s"], rel=1e-6)
+
+
+def test_methanol_annulus_route_can_pressurise_the_annulus():
+    e = eng()
+    p0 = pv(e, "PT-401")
+    e.command_valve("SLV-101", "close")
+    e.command_valve("AWV-101", "open")
+    e.command_valve("AMV-101", "open")
+    e.command_valve("MIV-301", "open")
+    run_until(e, 1800.0)
+    assert pv(e, "PT-401") > p0 + 20e5  # bullheading: annulus pressure rises toward the pump pressure

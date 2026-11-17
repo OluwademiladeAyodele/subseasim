@@ -1,7 +1,7 @@
-import type { ExerciseSummary, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
+import type { ExerciseSummary, SandChokeInputs, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
 
 /** Scenario a brand-new session starts with (dynamic model, full system). */
-export const DEFAULT_SCENARIO = "subsea_dynamic_base";
+export const DEFAULT_SCENARIO = "xt_230xp22b_multiphase";
 
 export interface IntegrityTestRequest {
   type: "pressure_hold" | "inflow" | "stroke";
@@ -68,6 +68,17 @@ export const api = {
       command,
       ...(position_pct !== undefined ? { position_pct } : {}),
     }),
+  selector: (sid: string, tag: string, command: "open" | "close") =>
+    request<SessionPayload>("POST", `/api/sessions/${sid}/hydraulics/selectors/${encodeURIComponent(tag)}`, { command }),
+  supply: (sid: string, id: string, available: boolean) =>
+    request<SessionPayload>("POST", `/api/sessions/${sid}/hydraulics/supplies/${encodeURIComponent(id)}`, { available }),
+  blackOil: (sid: string, body: Record<string, number | string>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/black-oil`, body),
+  fluidModel: (sid: string, model: "single_phase" | "black_oil") => request<SessionPayload>("POST", `/api/sessions/${sid}/fluid-model`, { model }),
+  mpfmFaults: (sid: string, body: Record<string, number | boolean>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/mpfm/faults`, body),
+  mpfmCalibrate: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/mpfm/calibrate`),
+  sandInputs: (sid: string, body: SandChokeInputs) => request<SessionPayload>("PUT", `/api/sessions/${sid}/sand-choke/inputs`, body),
+  sandExample: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/sand-choke/example`),
+  sandFastForward: (sid: string, days: number) => request<SessionPayload>("POST", `/api/sessions/${sid}/sand-choke/fast-forward`, { days }),
   pump: (sid: string, chem: string, body: { running?: boolean; discharge_pressure_pa?: number }) =>
     request<SessionPayload>("POST", `/api/sessions/${sid}/chemicals/${encodeURIComponent(chem)}`, body),
   integrityStart: (sid: string, body: IntegrityTestRequest) => request<SessionPayload>("POST", `/api/sessions/${sid}/integrity/tests`, body),

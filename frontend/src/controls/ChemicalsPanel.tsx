@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import { Badge, Button, Input } from "@/components/ui/primitives";
 import { concFromFraction, type DisplayPrefs, fmt, formatDuration, instrumentDisplay, paToBarDelta, pressureFromPa } from "@/lib/units";
-import type { ChemicalSnapshot, RestrictionSnapshot, SimulationState, ValveCommand } from "@/types/simulation";
+import type { ChemicalRoute, ChemicalSnapshot, RestrictionSnapshot, SimulationState, ValveCommand } from "@/types/simulation";
 
 const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "neutral" | "info" }> = {
   injecting: { label: "Injecting", tone: "ok" },
@@ -48,7 +48,7 @@ export function ChemicalsPanel({ state, prefs, onPump, onValve, onSelect }: Prop
   );
 }
 
-function ChemicalCard({ c, state, prefs, onPump, onValve, onSelect }: { c: ChemicalSnapshot } & Props) {
+export function ChemicalCard({ c, state, prefs, onPump, onValve, onSelect }: { c: ChemicalSnapshot } & Props) {
   const el = (tag: string) => state.elements.find((e) => (e as RestrictionSnapshot).tag === tag) as RestrictionSnapshot | undefined;
   const iso = el(c.isolation_valve);
   const cv = el(c.control_valve);
@@ -139,6 +139,9 @@ function ChemicalCard({ c, state, prefs, onPump, onValve, onSelect }: { c: Chemi
           <Kv k="In line / exported" v={`${fmt(c.in_production_line_m3 * 1000, 0)} / ${fmt(c.exported_m3 * 1000, 0)} L`} />
         </div>
 
+        {c.annulus_route && <AnnulusRoute c={c} state={state} onValve={onValve} onSelect={onSelect} />}
+        {c.routes?.map((r) => <ProductionRoute key={r.id} r={r} state={state} onValve={onValve} onSelect={onSelect} />)}
+
         {analysers.length > 0 && (
           <table className="w-full text-[12.5px]">
             <thead>
@@ -194,6 +197,95 @@ function Kv({ k, v }: { k: string; v: string }) {
     <div className="flex justify-between gap-2 border-b border-line/40 py-0.5">
       <span className="text-dim">{k}</span>
       <span className="num text-right text-fg">{v}</span>
+    </div>
+  );
+}
+
+/** Second route of a circuit: into the annulus service line (via MIV + NRV). */
+function AnnulusRoute({ c, state, onValve, onSelect }: { c: ChemicalSnapshot; state: SimulationState; onValve: Props["onValve"]; onSelect: Props["onSelect"] }) {
+  const r = c.annulus_route!;
+  const miv = state.elements.find((e) => (e as RestrictionSnapshot).tag === r.valve) as RestrictionSnapshot | undefined;
+  const lph = r.flow_m3s * 3600 * 1000;
+  const on = r.status === "injecting";
+  return (
+    <div className="rounded-lg border border-[#99f6e4] bg-[#f0fdfa] px-3 py-2.5" data-testid={`chem-annulus-${c.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[12.5px] font-semibold text-[#115e59]">Into the annulus service line</div>
+          <div className="text-[11.5px] text-[#0f766e]">Flushes the service line to the host (SLV open) or bullheads the annulus (AWV / AMV open)</div>
+        </div>
+        <Badge tone={on ? "ok" : r.status === "insufficient_differential" ? "bad" : "neutral"}>
+          {on && <span className="live-dot mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-ok" />}
+          {on ? "Injecting" : r.status === "insufficient_differential" ? "No differential" : r.status === "pump_stopped" ? "Pump stopped" : "Isolated"}
+        </Badge>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {miv && (
+          <>
+            <button type="button" onClick={() => onSelect(miv.tag)} className="num text-[12px] font-bold text-fg hover:text-accent">
+              {miv.tag}
+            </button>
+            <Button size="xs" variant="ok" onClick={() => onValve(miv.tag, "open")} aria-label={`${miv.tag} open`}>
+              Open
+            </Button>
+            <Button size="xs" variant="bad" onClick={() => onValve(miv.tag, "close")} aria-label={`${miv.tag} close`}>
+              Close
+            </Button>
+            <span className="num text-[11px] text-dim">{fmt(miv.position_pct, 0)} %{miv.moving ? " moving" : ""}</span>
+          </>
+        )}
+        <span className="num ml-auto text-[12.5px]">
+          <span className="font-semibold">{fmt(lph, lph < 10 ? 2 : 0)}</span> <span className="text-dim">L/h</span>
+          <span className="mx-2 text-line-strong">|</span>
+          <span className="text-dim">to annulus system </span>
+          <span className="font-semibold">{fmt(r.cumulative_m3 * 1000, 0)}</span> <span className="text-dim">L</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Further route of a circuit into the production path (e.g. methanol injection valves either side of PWV). */
+function ProductionRoute({ r, state, onValve, onSelect }: { r: ChemicalRoute; state: SimulationState; onValve: Props["onValve"]; onSelect: Props["onSelect"] }) {
+  const v = state.elements.find((e) => (e as RestrictionSnapshot).tag === r.valve) as RestrictionSnapshot | undefined;
+  const shown = state.tag_aliases?.[r.valve]?.tag ?? r.valve;
+  const lph = r.flow_m3s * 3600 * 1000;
+  const on = r.status === "injecting";
+  const st = STATUS[r.status] ?? { label: r.status, tone: "neutral" as const };
+  return (
+    <div className="rounded-lg border border-line bg-panel-2 px-3 py-2.5" data-testid={`chem-route-${r.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[12.5px] font-semibold text-fg">{r.name}</div>
+          <div className="text-[11.5px] text-muted">Into the production stream at {r.injection_node_name}</div>
+        </div>
+        <Badge tone={st.tone}>
+          {on && <span className="live-dot mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-ok" />}
+          {st.label}
+        </Badge>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {v && (
+          <>
+            <button type="button" onClick={() => onSelect(v.tag)} className="num text-[12px] font-bold text-fg hover:text-accent" title={v.tag}>
+              {shown}
+            </button>
+            <Button size="xs" variant="ok" onClick={() => onValve(v.tag, "open")} aria-label={`${shown} open`}>
+              Open
+            </Button>
+            <Button size="xs" variant="bad" onClick={() => onValve(v.tag, "close")} aria-label={`${shown} close`}>
+              Close
+            </Button>
+            <span className="num text-[11px] text-dim">{fmt(v.position_pct, 0)} %{v.moving ? " moving" : ""}</span>
+          </>
+        )}
+        <span className="num ml-auto text-[12.5px]">
+          <span className="font-semibold">{fmt(lph, lph < 10 ? 2 : 0)}</span> <span className="text-dim">L/h</span>
+          <span className="mx-2 text-line-strong">|</span>
+          <span className="text-dim">injected </span>
+          <span className="font-semibold">{fmt(r.cumulative_m3 * 1000, 0)}</span> <span className="text-dim">L</span>
+        </span>
+      </div>
     </div>
   );
 }
