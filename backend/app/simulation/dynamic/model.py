@@ -115,6 +115,9 @@ class DynamicModel:
                 cps[ec.id] = ec.transport_cells_per_segment or self.cfg.dynamics.transport_cells_per_segment
         self.chem_ids = [c.id for c in self.cfg.chemicals]
         self.grid = TransportGrid(self.layout, topo, len(self.chem_ids), cps, node_vol)
+        self._cps, self._node_vol = cps, node_vol
+        #: Multiphase (black-oil) coupling, attached by the engine (None = single phase).
+        self.mp = None
         self.elements: dict[str, Element] = {e.id: e for e in [*topo.path, *self.built.branch_elements]}
         # production node -> outgoing link along the path (flow metering)
         self.prod_out_link: dict[str, int] = {}
@@ -273,15 +276,29 @@ class DynamicModel:
         P[np.isnan(P)] = u.P_ATM
         net.P = P
         self._apply_supply_pressures()
-        net.solve(None)
-        # thermal / transport steady state for the initial flows
-        F = self.grid.set_flows(net.Q)
-        self._inj_at = None
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
-        self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
-        self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
-        self._update_node_temperatures(None)
+        if self.mp is None:
+            net.solve(None)
+            # thermal / transport steady state for the initial flows
+            F = self.grid.set_flows(net.Q)
+            self._inj_at = None
+            dT = self._throttle(F)
+            self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            dT = self._throttle(F)
+            self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            self._update_node_temperatures(None)
+        else:
+            # property / pressure / temperature fixed-point for the initial steady state
+            for _ in range(12):
+                self.mp.update(force=True)
+                net.solve(None)
+                F = self.grid.set_flows(net.Q)
+                self._inj_at = None
+                dT = self._throttle(F)
+                self.grid.step(None, F, dT, self._injections(F), self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+                self._update_node_temperatures(None)
+            self.mp.comp.step(None, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            self.mp.update(force=True)
+            self.mp.initialise_content()
         self.S = np.zeros(net.n)
         self.p0 = net.P.copy()
         self.p_prev = net.P.copy()
@@ -399,9 +416,20 @@ class DynamicModel:
         v = self.grid.V[cells]
         return float((self.grid.T[cells] * v).sum() / v.sum())
 
+    def _throttle(self, F: np.ndarray) -> np.ndarray:
+        lp = self.mp.link_props if self.mp is not None else None
+        return self.grid.throttle(F, self.net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta, lp)
+
+    def attach_multiphase(self, fluid, rho_ref: float, gor: float, wc: float, correlation: str) -> None:
+        from app.simulation.multiphase.dynamic import MultiphaseCoupling
+
+        self.mp = MultiphaseCoupling(self, fluid, rho_ref, gor, wc, correlation, self._cps, self._node_vol)
+
     def step(self, dt: float, t_now: float) -> None:
         net = self.net
         self._apply_supply_pressures()
+        if self.mp is not None:
+            self.mp.update()
         P_old, Q_old = net.P.copy(), net.Q.copy()
         try:
             net.solve(dt, self.S)
@@ -410,7 +438,9 @@ class DynamicModel:
             self.failed = f"dynamic hydraulic solver failed: {exc}"
             raise DynamicSolverError(self.failed) from exc
         F = self.grid.set_flows(net.Q)
-        dT = self.grid.throttle(F, net.P, self.fluid.rho, self.fluid.cp, self.fluid.beta)
+        if self.mp is not None:
+            self.mp.set_cell_targets(P_old)
+        dT = self._throttle(F)
         inj = self._injections(F)
         self._inj_at = None
         for c in self.circuits:
@@ -420,6 +450,8 @@ class DynamicModel:
             for r in c.routes:
                 r.cum_m3 += max(float(net.Q[r.link]), 0.0) * dt
         self.grid.step(dt, F, dT, inj, self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+        if self.mp is not None:
+            self.mp.comp.step(dt, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
         self._update_node_temperatures(dt)
         self.max_rate_pa_s = float(np.max(np.abs(net.P - P_old)[~net.fixed])) / dt if net.n else 0.0
         self.p_prev = P_old
@@ -450,6 +482,13 @@ class DynamicModel:
         P = self.net.P
         return float(P[info.node_idx[k]] * (1 - w) + P[info.node_idx[k + 1]] * w)
 
+    def _pv_flow_ref(self, inst: Instrument) -> float | None:
+        mp, self.mp = self.mp, None
+        try:
+            return self._pv(inst)
+        finally:
+            self.mp = mp
+
     def _pv(self, inst: Instrument) -> float | None:
         net = self.net
         idx = self.layout.node_index
@@ -466,6 +505,9 @@ class DynamicModel:
                 info = self.layout.pipes[inst.element]
                 return float(self.T_node[info.node_idx[0]])
             return self.node_temperature(inst.node)  # type: ignore[arg-type]
+        if inst.type == "flow" and self.mp is not None:
+            q = self._pv_flow_ref(inst)
+            return None if q is None else self.mp.in_situ_flow(inst, q)
         if inst.type == "flow":
             if inst.element:
                 e = self.elements[inst.element]
@@ -696,7 +738,7 @@ class DynamicModel:
                             "message": f"Absolute pressure at {nm} is {u.pa_to_bara(p):.2f} bara (<= 0): a liquid cannot sustain "
                                        "this (column separation / cavitation is not modelled). Results are not physically valid.",
                             "location": nd.topo})
-            elif nd.zone == PRODUCTION and nd.topo and p < self.fluid.p_bubble:
+            elif self.mp is None and nd.zone == PRODUCTION and nd.topo and p < self.fluid.p_bubble:
                 out.append({"severity": "warning", "code": "BELOW_BUBBLE_POINT",
                             "message": f"Pressure at {topo_nodes[nd.topo].name} ({u.pa_to_bara(p):.1f} bara) is below the bubble "
                                        f"point ({u.pa_to_bara(self.fluid.p_bubble):.1f} bara): gas would come out of solution; "
@@ -706,8 +748,10 @@ class DynamicModel:
             out.append({"severity": "warning", "code": "REVERSE_FLOW",
                         "message": "Fluid is flowing back into the reservoir (cross-flow / injection). Injectivity is assumed "
                                    "equal to productivity and the same fluid is assumed.", "location": None})
+        if self.mp is not None:
+            out += self.mp.diagnostics()
         for eid, info in self.layout.pipes.items():
-            if info.zone != PRODUCTION:
+            if info.zone != PRODUCTION or self.mp is not None:
                 continue
             q = abs(float(net.Q[info.link_idx[0]]))
             if q > NO_FLOW_M3S:

@@ -51,6 +51,19 @@ class FluidUpdate(_Req):
     bubble_point_pressure_pa: Annotated[float, Field(ge=0, le=2.0e8)] | None = None
 
 
+class BlackOilUpdate(_Req):
+    producing_gor_sm3_sm3: Annotated[float, Field(ge=0, le=2000)] | None = None
+    water_cut: Annotated[float, Field(ge=0, le=0.98)] | None = None
+    oil_api: Annotated[float, Field(ge=10, le=70)] | None = None
+    gas_specific_gravity: Annotated[float, Field(ge=0.55, le=1.5)] | None = None
+    water_salinity_wt_pct: Annotated[float, Field(ge=0, le=26)] | None = None
+    correlation: Literal["beggs_brill", "no_slip"] | None = None
+
+
+class FluidModelRequest(_Req):
+    model: Literal["single_phase", "black_oil"]
+
+
 class ModeRequest(_Req):
     mode: Literal["steady", "dynamic"]
 

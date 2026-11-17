@@ -262,6 +262,103 @@ export interface SchematicLayout {
   annotations: { type: string; x: number; y: number; w?: number; h?: number; text?: string; label?: string }[];
 }
 
+export interface PhaseRates {
+  oil_sm3_d: number;
+  gas_sm3_d: number;
+  water_sm3_d: number;
+  liquid_sm3_d: number;
+  gor_sm3_sm3: number;
+  water_cut: number;
+  mass_kg_s: number;
+  oil_mass_kg_s: number;
+  gas_mass_kg_s: number;
+  water_mass_kg_s: number;
+}
+
+export interface MultiphaseNode {
+  node: string;
+  name: string;
+  p_pa: number;
+  t_k: number;
+  gor_sm3_sm3: number;
+  water_cut: number;
+  rs_sm3_sm3: number;
+  bubble_point_pa: number;
+  bo: number;
+  bg: number;
+  bw: number;
+  z: number;
+  rho_oil: number;
+  rho_gas: number;
+  rho_water: number;
+  mu_oil_pas: number;
+  mu_gas_pas: number;
+  mu_water_pas: number;
+  gvf: number;
+  rho_mix_ns: number;
+  free_gas_mass_fraction: number;
+  q_oil_m3s: number;
+  q_gas_m3s: number;
+  q_water_m3s: number;
+  mass_flow_kg_s: number;
+}
+
+export interface MultiphasePipe {
+  element: string;
+  segment?: number;
+  node?: string;
+  distance_m?: number;
+  pattern: string;
+  holdup: number;
+  lambda_l: number;
+  v_sl: number;
+  v_sg: number;
+  rho_s: number;
+  rho_ns: number;
+  friction_multiplier?: number;
+  p_pa: number;
+  t_k: number;
+  gor?: number;
+  water_cut?: number;
+}
+
+export interface ComponentBalance {
+  in_kg: number;
+  out_kg: number;
+  inventory_kg: number;
+  inventory_change_kg: number;
+  residual_kg: number;
+  relative_residual: number;
+}
+
+export interface MultiphaseReport {
+  fluid_model: "black_oil";
+  correlation: "beggs_brill" | "no_slip";
+  dynamic_formulation: string;
+  standard_conditions: { p_pa: number; t_k: number; note: string };
+  reference_density_kg_m3: number;
+  params: {
+    name: string;
+    oil_api: number;
+    gas_specific_gravity: number;
+    producing_gor_sm3_sm3: number;
+    water_cut: number;
+    water_salinity_wt_pct: number;
+    oil_density_sc_kg_m3: number;
+    gas_density_sc_kg_m3: number;
+    water_density_sc_kg_m3: number;
+    bubble_point_reservoir_pa: number;
+  };
+  rates_reservoir: PhaseRates;
+  rates_arrival: PhaseRates;
+  nodes: MultiphaseNode[];
+  pipes: MultiphasePipe[];
+  mass_balance: Record<"oil" | "gas" | "water", ComponentBalance> | null;
+  validity: { correlation: string; in_range: boolean; notes: string[] }[];
+  steady_reference: { ok: boolean; message: string; critical_choke: boolean; rates: PhaseRates | null } | null;
+  limitations: string[];
+}
+
 export type IntegrityType = "pressure_hold" | "inflow" | "stroke";
 
 export interface IntegrityTestSnapshot {
@@ -365,6 +462,10 @@ export interface SimulationState {
   /** engineering-workstation schematic layout (static), null if none */
   schematic?: SchematicLayout | null;
   control_hydraulics?: ControlHydraulics | null;
+  fluid_model?: "single_phase" | "black_oil";
+  /** fluid models this scenario supports (static) */
+  fluid_models?: ("single_phase" | "black_oil")[];
+  multiphase?: MultiphaseReport | null;
   chemical_config?: { id: string; name: string; color: string; display_unit: "ppm" | "vol%"; target_min: number | null; target_max: number | null }[];
   integrity?: { tests: IntegrityTestSnapshot[]; test_points: { transmitter: string; node: string; description: string }[] };
   integrity_presets?: IntegrityPreset[];

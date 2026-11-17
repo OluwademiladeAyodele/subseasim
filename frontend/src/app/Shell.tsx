@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import type { Simulation } from "@/hooks/useSimulation";
 import { ChemicalsPage } from "@/pages/ChemicalsPage";
 import { ConditionsPage } from "@/pages/ConditionsPage";
+import { MultiphasePage } from "@/pages/MultiphasePage";
 import { DiagnosticsPage } from "@/pages/DiagnosticsPage";
 import { EventsPage } from "@/pages/EventsPage";
 import { InstrumentsPage } from "@/pages/InstrumentsPage";
@@ -36,6 +37,7 @@ const PAGES: Record<RouteId, React.ComponentType> = {
   events: EventsPage,
   diagnostics: DiagnosticsPage,
   conditions: ConditionsPage,
+  multiphase: MultiphasePage,
   scenario: ScenarioPage,
   training: TrainingPage,
 };

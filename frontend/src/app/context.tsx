@@ -33,6 +33,8 @@ export interface Actions {
   valve: (tag: string, c: ValveCommand, pos?: number) => Promise<boolean>;
   pump: (chem: string, body: { running?: boolean; discharge_pressure_pa?: number }) => Promise<boolean>;
   selector: (tag: string, command: "open" | "close") => Promise<boolean>;
+  blackOil: (body: Record<string, number | string>) => Promise<boolean>;
+  fluidModel: (model: "single_phase" | "black_oil") => Promise<boolean>;
   supply: (id: string, available: boolean) => Promise<boolean>;
   integrityStart: (req: IntegrityTestRequest) => Promise<boolean>;
   integrityAbort: (id: number) => Promise<boolean>;
@@ -116,6 +118,8 @@ export function WorkstationProvider({
       },
       pump: (chem, body) => run((sid) => api.pump(sid, chem, body)),
       selector: (tag, c) => run((sid) => api.selector(sid, tag, c)),
+      blackOil: (body) => run((sid) => api.blackOil(sid, body)),
+      fluidModel: (m) => run((sid) => api.fluidModel(sid, m)),
       supply: (id, a) => run((sid) => api.supply(sid, id, a)),
       integrityStart: (req) => run((sid) => api.integrityStart(sid, req)),
       integrityAbort: (id) => run((sid) => api.integrityAbort(sid, id)),

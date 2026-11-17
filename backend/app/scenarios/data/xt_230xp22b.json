@@ -1873,6 +1873,15 @@
       "SCSSV-101"
     ]
   },
+  "black_oil": {
+    "name": "Illustrative light oil with associated gas and produced water",
+    "oil_api": 35.0,
+    "gas_specific_gravity": 0.75,
+    "producing_gor_sm3_sm3": 120.0,
+    "water_cut_fraction": 0.3,
+    "water_salinity_wt_pct": 3.5,
+    "correlation": "beggs_brill"
+  },
   "tag_aliases": {
     "AWV-101": {
       "tag": "AWV3034",

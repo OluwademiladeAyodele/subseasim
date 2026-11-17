@@ -161,6 +161,9 @@ class HydraulicNetwork:
         self._pE = np.array([l.roughness for l in pl]) / np.maximum(self._pD, 1e-12)
         self._prho = np.array([l.rho for l in pl])
         self._pmu = np.array([l.mu for l in pl])
+        #: Two-phase friction multiplier per pipe link (1 = single phase);
+        #: set by the multiphase property update (Beggs & Brill exp(S) x rho_ref / rho_ns).
+        self._pfric = np.ones(len(pl))
         self._orf_rho = np.array([links[i].rho for i in self.orf_idx])
         self._chk_rho = np.array([links[i].rho for i in self.chk_idx])
         self._chk_cap = np.array([links[i].capacity_open for i in self.chk_idx])
@@ -210,7 +213,7 @@ class HydraulicNetwork:
         f = churchill(re_s, self._pE)
         f2 = churchill(re_s * 1.0001, self._pE)
         slope = np.log(f2 / f) / math.log(1.0001)
-        geom = (self._pL / self._pD) * self._prho / 2.0
+        geom = (self._pL / self._pD) * self._prho * self._pfric / 2.0
         turb = f * geom * v * np.abs(v)
         dturb = f * geom * 2.0 * np.abs(v) * (1.0 + slope / 2.0) / self._pA
         lam_k = 32.0 * self._pmu * self._pL / (self._pD**2 * self._pA)

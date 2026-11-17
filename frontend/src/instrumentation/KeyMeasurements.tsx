@@ -18,7 +18,8 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
   const pressures = prod.filter((i) => i.type === "pressure");
   const temps = prod.filter((i) => i.type === "temperature");
   const dp = prod.find((i) => i.type === "differential_pressure");
-  const pick = [pressures[1] ?? pressures[0], pressures[0], dp, temps[temps.length - 1]].filter(
+  const mp = state.multiphase;
+  const pick = [pressures[1] ?? pressures[0], pressures[0], mp ? undefined : dp, temps[temps.length - 1]].filter(
     (x, i, a): x is InstrumentSnapshot => !!x && a.indexOf(x) === i,
   );
   const nodeRate = (i: InstrumentSnapshot) => (i.node ? state.nodes.find((n) => n.id === i.node)?.rate_pa_s ?? 0 : 0);
@@ -30,7 +31,7 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       <Stat
         testId="kpi-flow"
-        label={dynamic ? "Flowline flow" : "Production flow"}
+        label={mp ? "Production (reservoir volume)" : dynamic ? "Flowline flow" : "Production flow"}
         value={failed ? "INVALID" : fmt(q === null ? null : flowFromM3s(q, prefs.flowUnit), 0)}
         unit={failed ? undefined : FLOW_LABEL[prefs.flowUnit]}
         tone={failed ? "fault" : "accent"}
@@ -42,6 +43,16 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
               : `${fmt(h.mass_flow_kg_s, 2)} kg/s · ${h.status.replace("_", "-")}`
         }
       />
+      {mp && (
+        <Stat
+          testId="kpi-phases"
+          label="Oil · gas · water (std)"
+          value={fmt(mp.rates_arrival.oil_sm3_d, 0)}
+          unit="Sm³/d oil"
+          tone="accent"
+          sub={`gas ${fmt(mp.rates_arrival.gas_sm3_d / 1000, 1)} kSm³/d · water ${fmt(mp.rates_arrival.water_sm3_d, 0)} Sm³/d at the manifold`}
+        />
+      )}
       {dynamic ? (
         <Stat
           testId="kpi-process"

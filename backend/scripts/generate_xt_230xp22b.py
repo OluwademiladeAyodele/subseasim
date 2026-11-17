@@ -163,6 +163,13 @@ sc["control_hydraulics"] = {
     "fail_safe_close": [t for t in LP_VALVES if not t.startswith(("CHK", "CIMV"))] + ["SCSSV-101"],
 }
 
+# --- three-phase black-oil fluid (used by the multiphase variant) -----------
+sc["black_oil"] = {
+    "name": "Illustrative light oil with associated gas and produced water",
+    "oil_api": 35.0, "gas_specific_gravity": 0.75, "producing_gor_sm3_sm3": 120.0, "water_cut_fraction": 0.30,
+    "water_salinity_wt_pct": 3.5, "correlation": "beggs_brill",
+}
+
 # --- display tags (reference numbering) -----------------------------------
 V, U, P, A = "verified", "uncertain", "placeholder", "addition"
 alias = {
@@ -445,11 +452,36 @@ layout_doc = {
     "annotations": annotations,
 }
 
+multiphase = {
+    "extends": "xt_230xp22b",
+    "id": "xt_230xp22b_multiphase",
+    "name": "XT workstation - three-phase production (oil, gas, water)",
+    "description": ("The XT workstation system with a three-phase black-oil fluid: gas comes out of solution in the upper tubing, "
+                    "the production choke can run critical, and the flowline carries oil, gas and water in a Beggs & Brill flow "
+                    "pattern. Generic correlations (Standing, Vasquez-Beggs, Beggs-Robinson, DAK, Lee, McCain) - ILLUSTRATIVE, "
+                    "not fitted to a PVT report."),
+    "fluid_model": "black_oil",
+    # FT-101 reads the IN-SITU gas + liquid volumetric flow downstream of the choke in the
+    # three-phase model: wider range than the single-phase liquid meter
+    "instruments": [
+        ({**i, "range_max": 12000, "description": "Production flow downstream of choke (in-situ gas + liquid volume, line conditions)"}
+         if i["tag"] == "FT-101" else i)
+        for i in json.load(open(HERE.parent / "app" / "scenarios" / "data" / "base_single_phase.json", encoding="utf-8"))["instruments"]
+    ],
+    "briefing": [
+        "Three-phase model: open Multiphase to see oil, gas and water rates at standard conditions, the flow pattern and liquid holdup along the path, and the phase mass balances.",
+        "Change the water cut or GOR on Conditions: the new composition travels up the well and along the flowline with the fluid.",
+        "Close the choke in steps and watch the flow move from critical (choked) to sub-critical as the differential falls.",
+    ],
+}
+
 if __name__ == "__main__":
     root = HERE.parent / "app" / "scenarios"
     (root / "layouts").mkdir(exist_ok=True)
     with open(root / "data" / "xt_230xp22b.json", "w", encoding="utf-8") as f:
         json.dump(sc, f, indent=2)
+    with open(root / "data" / "xt_230xp22b_multiphase.json", "w", encoding="utf-8") as f:
+        json.dump(multiphase, f, indent=2)
     with open(root / "layouts" / "xt_230xp22b.json", "w", encoding="utf-8") as f:
         json.dump(layout_doc, f, indent=2)
     print("written xt_230xp22b scenario + layout")

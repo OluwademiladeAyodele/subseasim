@@ -38,6 +38,28 @@ class FluidConfig(_Strict):
     compressibility_1_bar: Annotated[float, Field(gt=0, lt=1e-2)] = 7.0e-5
 
 
+class BlackOilConfig(_Strict):
+    """Three-phase black-oil fluid (oil, gas, water) - generic correlations.
+
+    See docs/MULTIPHASE_FLOW_MODEL.md for the correlations, their data ranges
+    and limitations. Values are ILLUSTRATIVE unless taken from a PVT report."""
+
+    name: str
+    oil_api: Annotated[float, Field(ge=10, le=70)]
+    gas_specific_gravity: Annotated[float, Field(ge=0.55, le=1.5)]
+    #: Producing gas-oil ratio at standard conditions (15 C, 1.01325 bar).
+    producing_gor_sm3_sm3: Annotated[float, Field(ge=0, le=2000)]
+    #: Water cut at standard conditions, fraction of liquid.
+    water_cut_fraction: Annotated[float, Field(ge=0, le=0.98)]
+    water_salinity_wt_pct: Annotated[float, Field(ge=0, le=26)] = 3.5
+    oil_specific_heat_j_kgk: Annotated[float, Field(gt=500, lt=5000)] = 2100.0
+    gas_specific_heat_j_kgk: Annotated[float, Field(gt=500, lt=5000)] = 2300.0
+    water_specific_heat_j_kgk: Annotated[float, Field(gt=2000, lt=5000)] = 4100.0
+    gas_cp_cv: Annotated[float, Field(gt=1.05, lt=1.67)] = 1.27
+    #: Multiphase pressure-gradient correlation.
+    correlation: Literal["beggs_brill", "no_slip"] = "beggs_brill"
+
+
 class ReservoirConfig(_Strict):
     pressure_bara: Annotated[float, Field(gt=1, lt=2000)]
     temperature_c: Annotated[float, Field(gt=-10, lt=250)]
@@ -520,6 +542,11 @@ class ScenarioConfig(_Strict):
     #: Briefing notes shown to the intern (operation to try, what to
     #: watch). Text only; every response is calculated by the model.
     briefing: list[str] = Field(default_factory=list)
+    #: Three-phase black-oil fluid (used when fluid_model = "black_oil").
+    black_oil: BlackOilConfig | None = None
+    #: Default fluid model: single-phase constant-property liquid (simplified,
+    #: Release 1) or three-phase black oil with multiphase flow.
+    fluid_model: Literal["single_phase", "black_oil"] = "single_phase"
     #: Engineering tag -> display tag (reference HMI numbering).
     tag_aliases: dict[str, TagAliasConfig] = Field(default_factory=dict)
     #: Subsea control hydraulics (selector valves, SCM headers, fail-safe).
@@ -527,3 +554,9 @@ class ScenarioConfig(_Strict):
     #: Id of a separate engineering-workstation schematic layout
     #: (``app/scenarios/layouts/<id>.json``). Positions only - no physics.
     schematic: str | None = None
+
+    @model_validator(mode="after")
+    def _black_oil_present(self):
+        if self.fluid_model == "black_oil" and self.black_oil is None:
+            raise ValueError("fluid_model 'black_oil' requires a black_oil fluid configuration")
+        return self

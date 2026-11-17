@@ -81,6 +81,7 @@ export function useSimulation(): Simulation {
             integrity_presets: p.state.integrity_presets ?? prev.integrity_presets,
             chemical_config: p.state.chemical_config ?? prev.chemical_config,
             tag_aliases: p.state.tag_aliases ?? prev.tag_aliases,
+            fluid_models: p.state.fluid_models ?? prev.fluid_models,
             schematic: p.state.schematic !== undefined ? p.state.schematic : prev.schematic,
           },
     );

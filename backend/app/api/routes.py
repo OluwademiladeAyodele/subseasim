@@ -5,7 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.api.schemas import (
+    BlackOilUpdate,
     BoundaryUpdate,
+    FluidModelRequest,
     CreateSessionRequest,
     FluidUpdate,
     IntegrityTestRequest,
@@ -251,6 +253,29 @@ async def fluid(sid: str, req: FluidUpdate) -> dict:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
     return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/black-oil")
+async def black_oil(sid: str, req: BlackOilUpdate) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_black_oil(**req.model_dump())
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    except InvalidOperatingInput as exc:
+        raise HTTPException(422, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/fluid-model")
+async def fluid_model(sid: str, req: FluidModelRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_fluid_model(req.model)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    s.training = None if s.training is None else type(s.training)(s.training.d)
+    return await _reinit(s)
 
 
 @router.post("/sessions/{sid}/training/start")

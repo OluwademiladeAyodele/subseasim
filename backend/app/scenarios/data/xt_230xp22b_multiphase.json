@@ -1,0 +1,111 @@
+{
+  "extends": "xt_230xp22b",
+  "id": "xt_230xp22b_multiphase",
+  "name": "XT workstation - three-phase production (oil, gas, water)",
+  "description": "The XT workstation system with a three-phase black-oil fluid: gas comes out of solution in the upper tubing, the production choke can run critical, and the flowline carries oil, gas and water in a Beggs & Brill flow pattern. Generic correlations (Standing, Vasquez-Beggs, Beggs-Robinson, DAK, Lee, McCain) - ILLUSTRATIVE, not fitted to a PVT report.",
+  "fluid_model": "black_oil",
+  "instruments": [
+    {
+      "tag": "PT-001",
+      "type": "pressure",
+      "description": "Downhole pressure gauge (PDG)",
+      "node": "N_BH",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-001",
+      "type": "temperature",
+      "description": "Downhole temperature gauge (PDG)",
+      "node": "N_BH",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-101",
+      "type": "pressure",
+      "description": "Tree production bore pressure (below PMV)",
+      "node": "N_TREE",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-101",
+      "type": "temperature",
+      "description": "Tree production bore temperature",
+      "node": "N_TREE",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-102",
+      "type": "pressure",
+      "description": "Pressure upstream of choke",
+      "node": "N_UC",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-102",
+      "type": "temperature",
+      "description": "Temperature upstream of choke",
+      "node": "N_UC",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PT-103",
+      "type": "pressure",
+      "description": "Pressure downstream of choke",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-103",
+      "type": "temperature",
+      "description": "Temperature downstream of choke",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 150
+    },
+    {
+      "tag": "PDT-101",
+      "type": "differential_pressure",
+      "description": "Choke differential pressure (PT-102 minus PT-103)",
+      "high_node": "N_UC",
+      "low_node": "N_DC",
+      "range_min": -50,
+      "range_max": 400
+    },
+    {
+      "tag": "FT-101",
+      "type": "flow",
+      "description": "Production flow downstream of choke (in-situ gas + liquid volume, line conditions)",
+      "node": "N_DC",
+      "range_min": 0,
+      "range_max": 12000
+    },
+    {
+      "tag": "PT-201",
+      "type": "pressure",
+      "description": "Flowline arrival pressure (boundary)",
+      "node": "N_ARR",
+      "range_min": 0,
+      "range_max": 690
+    },
+    {
+      "tag": "TT-201",
+      "type": "temperature",
+      "description": "Flowline arrival temperature",
+      "node": "N_ARR",
+      "range_min": 0,
+      "range_max": 150
+    }
+  ],
+  "briefing": [
+    "Three-phase model: open Multiphase to see oil, gas and water rates at standard conditions, the flow pattern and liquid holdup along the path, and the phase mass balances.",
+    "Change the water cut or GOR on Conditions: the new composition travels up the well and along the flowline with the fluid.",
+    "Close the choke in steps and watch the flow move from critical (choked) to sub-critical as the differential falls."
+  ]
+}

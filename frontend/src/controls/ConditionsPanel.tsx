@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button, Input } from "@/components/ui/primitives";
+import { BlackOilPanel } from "@/controls/BlackOilPanel";
 import {
   type DisplayPrefs,
   cpToPas,
@@ -21,6 +22,8 @@ interface Props {
   prefs: DisplayPrefs;
   onBoundary: (body: Record<string, number>) => Promise<boolean>;
   onFluid: (body: Record<string, number>) => Promise<boolean>;
+  onBlackOil?: (body: Record<string, number | string>) => Promise<boolean>;
+  onFluidModel?: (m: "single_phase" | "black_oil") => Promise<boolean>;
 }
 
 type Field = { key: string; label: string; unit: string; value: string };
@@ -46,7 +49,7 @@ function FieldRow({ f, onChange, invalid }: { f: Field; onChange: (v: string) =>
 
 const parse = (s: string) => (s.trim() === "" ? NaN : Number(s));
 
-export function ConditionsPanel({ state, prefs, onBoundary, onFluid }: Props) {
+export function ConditionsPanel({ state, prefs, onBoundary, onFluid, onBlackOil, onFluidModel }: Props) {
   const b = state.boundary;
   const f = state.fluid;
   const ref = prefs.pressureRef;
@@ -111,7 +114,15 @@ export function ConditionsPanel({ state, prefs, onBoundary, onFluid }: Props) {
           system resistance down to the downstream pressure.
         </p>
       </div>
+      {state.multiphase && onBlackOil && onFluidModel ? (
+        <BlackOilPanel state={state} onBlackOil={onBlackOil} onFluidModel={onFluidModel} />
+      ) : (
       <div>
+        {onBlackOil && onFluidModel && state.fluid_models?.includes("black_oil") && (
+          <div className="mb-4">
+            <BlackOilPanel state={state} onBlackOil={onBlackOil} onFluidModel={onFluidModel} />
+          </div>
+        )}
         <h3 className="mb-1 t-eyebrow">Fluid (constant-property liquid)</h3>
         <p className="mb-1 text-[12.5px] text-warn">{f.name} — illustrative data</p>
         {fFields.map((x) => (
@@ -124,6 +135,7 @@ export function ConditionsPanel({ state, prefs, onBoundary, onFluid }: Props) {
           Below the bubble point gas would evolve; the single-phase model then flags its results as invalid rather than modelling two-phase flow.
         </p>
       </div>
+      )}
     </div>
   );
 }

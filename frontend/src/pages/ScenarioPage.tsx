@@ -33,6 +33,7 @@ function scenarioTag(id: string): string {
   if (id.startsWith("ex")) return "Exercise";
   if (id === "subsea_dynamic_base") return "Full system";
   if (id === "xt_230xp22b") return "Tree workstation";
+  if (id === "xt_230xp22b_multiphase") return "Three-phase";
   return "Release 1";
 }
 

@@ -159,3 +159,18 @@ test("Christmas tree workstation: reference layout, valve and selector-valve ope
   await expect.poll(lpA, { timeout: 30_000 }).toBeLessThan(200);
   await page.keyboard.press("Escape");
 });
+
+test("three-phase production: phase rates, water-cut change, flow patterns", async ({ page }) => {
+  await nav(page, "Multiphase flow");
+  await expect(page.getByTestId("multiphase-page")).toBeVisible();
+  const wcTile = page.getByTestId("mp-oil-Entering the well (sandface)").locator("xpath=..").getByText(/WC/);
+  await expect(wcTile).toContainText("WC 30.0 %");
+  await expect(page.getByTestId("pattern-strip")).toBeVisible();
+  await startFast(page, "60");
+  const wc = page.getByLabel("Water cut");
+  await wc.fill("50");
+  await page.getByRole("button", { name: "Apply fluid" }).click();
+  // the composition entering the well changes at once; the manifold still sees the old fluid
+  await expect(wcTile).toContainText("WC 50.0 %", { timeout: 15_000 });
+  await expect(page.getByTestId("mp-balance")).toContainText("Surface gas");
+});
