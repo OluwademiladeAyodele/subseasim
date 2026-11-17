@@ -154,6 +154,16 @@ export interface ChemicalSnapshot {
   flow_transmitter: string | null;
   fully_mixed_concentration: number;
   cumulative_injected_m3: number;
+  /** optional second route into the annulus service line */
+  annulus_route?: {
+    valve: string;
+    check_valve: string;
+    flow_transmitter: string | null;
+    status: string;
+    flow_m3s: number;
+    cumulative_m3: number;
+    junction_pressure_pa: number;
+  } | null;
   in_production_line_m3: number;
   exported_m3: number;
   front_distance_m: number;
@@ -225,7 +235,9 @@ export interface LayoutPoint {
 }
 
 export interface LayoutAnnotation {
-  type: "rect" | "line" | "text";
+  type: "rect" | "line" | "text" | "body" | "cap" | "connector";
+  direction?: "left" | "right" | "up" | "down";
+  label_at?: "above" | "below" | "beyond";
   x?: number;
   y?: number;
   w?: number;
@@ -235,7 +247,7 @@ export interface LayoutAnnotation {
   x2?: number;
   y2?: number;
   label?: string;
-  label_position?: "top" | "bottom";
+  label_position?: "top" | "bottom" | "top-right";
   text?: string;
 }
 
@@ -246,6 +258,8 @@ export interface Layout {
   waypoints: Record<string, LayoutPoint[]>;
   instruments: Record<string, LayoutPoint>;
   annotations: LayoutAnnotation[];
+  /** where along its line each valve symbol sits (0..1, default 0.5) */
+  symbol_fraction?: Record<string, number>;
 }
 
 export interface SimulationState {

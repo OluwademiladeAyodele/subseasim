@@ -105,6 +105,8 @@ class SessionManager:
         self.settings = cfg
         self.sessions: dict[str, Session] = {}
         self._task: asyncio.Task | None = None
+        #: loop health (exposed by /api/health)
+        self.metrics: dict = {"tick_ms": 0.0, "tick_ms_max": 0.0, "real_period_s": 0.0, "running": 0, "sockets": 0}
 
     def create(self, scenario_id: str) -> Session:
         self._expire_idle()
@@ -136,7 +138,12 @@ class SessionManager:
             if not s.sockets and now - s.last_activity > self.settings.session_idle_timeout_s:
                 del self.sessions[sid]
 
-    async def tick(self, elapsed_wall_s: float) -> None:
+    async def tick(self, elapsed_wall_s: float, real_wall_s: float | None = None) -> None:
+        """Advance every running session by ``elapsed_wall_s`` x speed.
+        ``real_wall_s`` is the true time since the last tick (the credit may be
+        capped); the achieved speed is measured against it, so a slow loop is
+        reported honestly."""
+        real = real_wall_s if real_wall_s is not None else elapsed_wall_s
         now = time.monotonic()
         for s in list(self.sessions.values()):
             if s.sockets:
@@ -151,8 +158,8 @@ class SessionManager:
             if s.engine.status == "running":
                 t0 = s.engine.time_s
                 s.engine.advance(elapsed_wall_s * s.engine.time_scale)
-                if elapsed_wall_s > 0:
-                    inst = (s.engine.time_s - t0) / elapsed_wall_s
+                if real > 0:
+                    inst = (s.engine.time_s - t0) / real
                     prev = s.engine.achieved_speed
                     # smoothed simulated-seconds per wall-second actually achieved
                     s.engine.achieved_speed = inst if prev is None else 0.8 * prev + 0.2 * inst
@@ -169,12 +176,21 @@ class SessionManager:
         while True:
             await asyncio.sleep(period)
             now = time.monotonic()
-            elapsed = min(now - last, period * MAX_TICK_CREDIT_FACTOR)
+            real = now - last
+            elapsed = min(real, period * MAX_TICK_CREDIT_FACTOR)
             last = now
+            t0 = time.perf_counter()
             try:
-                await self.tick(elapsed)
+                await self.tick(elapsed, real)
             except Exception:  # noqa: BLE001 - keep the loop alive; error is logged
                 log.exception("simulation tick failed")
+            ms = (time.perf_counter() - t0) * 1000
+            m = self.metrics
+            m["tick_ms"] = 0.8 * m["tick_ms"] + 0.2 * ms
+            m["tick_ms_max"] = max(m["tick_ms_max"] * 0.99, ms)
+            m["real_period_s"] = real
+            m["running"] = sum(1 for x in self.sessions.values() if x.engine.status == "running")
+            m["sockets"] = sum(len(x.sockets) for x in self.sessions.values())
 
     def start(self) -> None:
         if self._task is None:

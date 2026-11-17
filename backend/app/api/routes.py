@@ -43,7 +43,13 @@ async def _after_change(s: Session) -> dict:
 
 @router.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "simulated": True, "sessions": len(manager.sessions)}
+    m = manager.metrics
+    return {
+        "status": "ok", "simulated": True, "sessions": len(manager.sessions),
+        "running": m["running"], "sockets": m["sockets"],
+        "tick_ms": round(m["tick_ms"], 1), "tick_ms_max": round(m["tick_ms_max"], 1),
+        "loop_period_s": round(m["real_period_s"], 3),
+    }
 
 
 @router.get("/scenarios")

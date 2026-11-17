@@ -504,7 +504,18 @@ class SimulationEngine:
         self._settle_since = None
 
     def _chemical_events(self) -> None:
-        for c, old, new in self.dyn.update_circuit_status():  # type: ignore[union-attr]
+        for c, old, new, route in self.dyn.update_circuit_status():  # type: ignore[union-attr]
+            if route == "annulus":
+                qa = float(self.dyn.net.Q[c.ann_link])  # type: ignore[union-attr, index]
+                if new == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection into the ANNULUS SERVICE LINE started: {qa * 3600 * 1000:.1f} L/h "
+                                    f"through {c.cfg.annulus_valve}", component=c.cfg.id)
+                elif old == "injecting":
+                    self.events.add(self.time_s, "chemical",
+                                    f"{c.cfg.name} injection into the annulus service line stopped ({new.replace('_', ' ')})",
+                                    component=c.cfg.id)
+                continue
             q = float(self.dyn.net.Q[c.inj_link])  # type: ignore[union-attr]
             if new == "injecting":
                 msg = (f"{c.cfg.name} injection STARTED: {q * 3600 * 1000:.1f} L/h entering the production stream at "
@@ -846,6 +857,12 @@ class SimulationEngine:
                 "pressure_transmitter": c.cfg.pressure_transmitter, "flow_transmitter": c.cfg.flow_transmitter,
                 "fully_mixed_concentration": qi / (q_prod) if q_prod > NO_FLOW_M3S and qi > 0 else 0.0,
                 "cumulative_injected_m3": c.cum_injected_m3,
+                "annulus_route": None if c.ann_link is None else {
+                    "valve": c.cfg.annulus_valve, "check_valve": c.cfg.annulus_check_valve,
+                    "flow_transmitter": c.cfg.annulus_flow_transmitter, "status": c.ann_status,
+                    "flow_m3s": float(net.Q[c.ann_link]), "cumulative_m3": c.cum_to_annulus_m3,
+                    "junction_pressure_pa": float(net.P[net.links[c.ann_link].dn]),
+                },
                 "in_production_line_m3": float(dyn.grid.inventory()[c.k]),
                 "exported_m3": float(dyn.grid.out_boundary[c.k]),
                 "front_distance_m": front["front_distance_m"],

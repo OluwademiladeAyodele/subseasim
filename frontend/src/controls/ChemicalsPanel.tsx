@@ -139,6 +139,8 @@ function ChemicalCard({ c, state, prefs, onPump, onValve, onSelect }: { c: Chemi
           <Kv k="In line / exported" v={`${fmt(c.in_production_line_m3 * 1000, 0)} / ${fmt(c.exported_m3 * 1000, 0)} L`} />
         </div>
 
+        {c.annulus_route && <AnnulusRoute c={c} state={state} onValve={onValve} onSelect={onSelect} />}
+
         {analysers.length > 0 && (
           <table className="w-full text-[12.5px]">
             <thead>
@@ -194,6 +196,50 @@ function Kv({ k, v }: { k: string; v: string }) {
     <div className="flex justify-between gap-2 border-b border-line/40 py-0.5">
       <span className="text-dim">{k}</span>
       <span className="num text-right text-fg">{v}</span>
+    </div>
+  );
+}
+
+/** Second route of a circuit: into the annulus service line (via MIV + NRV). */
+function AnnulusRoute({ c, state, onValve, onSelect }: { c: ChemicalSnapshot; state: SimulationState; onValve: Props["onValve"]; onSelect: Props["onSelect"] }) {
+  const r = c.annulus_route!;
+  const miv = state.elements.find((e) => (e as RestrictionSnapshot).tag === r.valve) as RestrictionSnapshot | undefined;
+  const lph = r.flow_m3s * 3600 * 1000;
+  const on = r.status === "injecting";
+  return (
+    <div className="rounded-lg border border-[#99f6e4] bg-[#f0fdfa] px-3 py-2.5" data-testid={`chem-annulus-${c.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[12.5px] font-semibold text-[#115e59]">Into the annulus service line</div>
+          <div className="text-[11.5px] text-[#0f766e]">Flushes the service line to the host (SLV open) or bullheads the annulus (AWV / AMV open)</div>
+        </div>
+        <Badge tone={on ? "ok" : r.status === "insufficient_differential" ? "bad" : "neutral"}>
+          {on && <span className="live-dot mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-ok" />}
+          {on ? "Injecting" : r.status === "insufficient_differential" ? "No differential" : r.status === "pump_stopped" ? "Pump stopped" : "Isolated"}
+        </Badge>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {miv && (
+          <>
+            <button type="button" onClick={() => onSelect(miv.tag)} className="num text-[12px] font-bold text-fg hover:text-accent">
+              {miv.tag}
+            </button>
+            <Button size="xs" variant="ok" onClick={() => onValve(miv.tag, "open")} aria-label={`${miv.tag} open`}>
+              Open
+            </Button>
+            <Button size="xs" variant="bad" onClick={() => onValve(miv.tag, "close")} aria-label={`${miv.tag} close`}>
+              Close
+            </Button>
+            <span className="num text-[11px] text-dim">{fmt(miv.position_pct, 0)} %{miv.moving ? " moving" : ""}</span>
+          </>
+        )}
+        <span className="num ml-auto text-[12.5px]">
+          <span className="font-semibold">{fmt(lph, lph < 10 ? 2 : 0)}</span> <span className="text-dim">L/h</span>
+          <span className="mx-2 text-line-strong">|</span>
+          <span className="text-dim">to annulus system </span>
+          <span className="font-semibold">{fmt(r.cumulative_m3 * 1000, 0)}</span> <span className="text-dim">L</span>
+        </span>
+      </div>
     </div>
   );
 }

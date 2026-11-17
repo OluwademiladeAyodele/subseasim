@@ -118,7 +118,10 @@ class PipeElementConfig(_ElementBase):
 class ValveElementConfig(_ElementBase):
     type: Literal["valve"]
     tag: str
-    valve_type: Literal["scssv", "master", "wing", "isolation", "annulus_master", "annulus_wing", "crossover", "injection_isolation"]
+    valve_type: Literal[
+        "scssv", "master", "wing", "swab", "isolation", "annulus_master", "annulus_wing", "crossover",
+        "service_line", "injection_isolation",
+    ]
     bore_diameter_m: Annotated[float, Field(gt=0.005, lt=2.0)]
     #: Resistance coefficient when fully open (dP = K rho v^2/2, v in bore).
     loss_coefficient_open: Positive
@@ -255,6 +258,9 @@ class LayoutConfig(_Strict):
     waypoints: dict[str, list[LayoutPoint]] = Field(default_factory=dict)
     instruments: dict[str, LayoutPoint] = Field(default_factory=dict)
     annotations: list[dict] = Field(default_factory=list)
+    #: Where along its drawn line a valve / choke symbol sits (0..1, default
+    #: 0.5). Presentation only.
+    symbol_fraction: dict[str, Annotated[float, Field(ge=0, le=1)]] = Field(default_factory=dict)
 
 
 class ReservoirTransientConfig(_Strict):
@@ -337,6 +343,13 @@ class ChemicalConfig(_Strict):
     check_valve: str | None = None
     pressure_transmitter: str | None = None
     flow_transmitter: str | None = None
+    #: Optional second route from the same pump into the ANNULUS service line
+    #: (methanol for service-line flushing / annulus bullheading): its own
+    #: supply node, isolation valve, non-return valve and flow transmitter.
+    annulus_supply_node: str | None = None
+    annulus_valve: str | None = None
+    annulus_check_valve: str | None = None
+    annulus_flow_transmitter: str | None = None
     pump: PumpConfig
     #: Temperature of the chemical as it enters the production stream.
     injection_temperature_c: float = 4.0

@@ -14,11 +14,13 @@ const GROUP_OF: Record<string, "production" | "annulus" | "chemical"> = {
   scssv: "production",
   master: "production",
   wing: "production",
+  swab: "production",
   isolation: "production",
   choke: "production",
   annulus_master: "annulus",
   annulus_wing: "annulus",
   crossover: "annulus",
+  service_line: "annulus",
   injection_isolation: "chemical",
   metering: "chemical",
 };
@@ -90,8 +92,8 @@ export function ValvesPage() {
   const { state } = useWorkstation();
   const valves = state.elements.filter((e): e is RestrictionSnapshot => e.kind === "valve" || e.kind === "choke");
   const groups: { id: "production" | "annulus" | "chemical"; title: string; sub: string; icon: React.ReactNode }[] = [
-    { id: "production", title: "Production tree & well", sub: "SCSSV, master, wing and production choke", icon: <Workflow size={16} /> },
-    { id: "annulus", title: "Annulus", sub: "Annulus master, wing and crossover valves", icon: <Layers size={16} /> },
+    { id: "production", title: "Production tree & well", sub: "SCSSV, master, wing, swab and production choke", icon: <Workflow size={16} /> },
+    { id: "annulus", title: "Annulus", sub: "Annulus master, wing, crossover and service line valves", icon: <Layers size={16} /> },
     { id: "chemical", title: "Chemical injection", sub: "Isolation and metering valves of each circuit", icon: <Droplets size={16} /> },
   ];
   return (

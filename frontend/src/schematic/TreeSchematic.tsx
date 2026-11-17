@@ -145,72 +145,103 @@ function VALUE_SHORT(vis: ReturnType<typeof valveVisual>): string {
 /** Rate thresholds for the trend arrow [SI units per second]. */
 const RATE_EPS: Record<string, number> = { pressure: 2, temperature: 2e-5 };
 
-function InstrumentBubble({
-  inst,
-  at,
-  target,
-  selected,
-  onClick,
-  prefs,
-  rate,
-  steady,
-  litresPerHour = false,
-}: {
+export interface TagRow {
   inst: InstrumentSnapshot;
-  at: LayoutPoint;
-  target: LayoutPoint | null;
-  selected: boolean;
-  onClick: () => void;
-  prefs: DisplayPrefs;
   rate: number | null;
   steady: number | null;
   litresPerHour?: boolean;
+}
+
+/**
+ * HMI transmitter tag box (as on subsea control-system pages): tag header and
+ * one value row per transmitter at that location. A pressure and a
+ * temperature transmitter at the same point share one "PTT" box. Each row is
+ * its own clickable instrument.
+ */
+function TagBox({
+  rows,
+  at,
+  target,
+  selectedTag,
+  onSelect,
+  prefs,
+}: {
+  rows: TagRow[];
+  at: LayoutPoint;
+  target: LayoutPoint | null;
+  selectedTag: string | null;
+  onSelect: (tag: string) => void;
+  prefs: DisplayPrefs;
 }) {
-  const [prefix, num] = inst.tag.split("-");
-  const d = litresPerHour && inst.value_si !== null
-    ? { value: inst.value_si * 3.6e6, unit: "L/h", digits: inst.value_si * 3.6e6 < 10 ? 2 : 0 }
-    : instrumentDisplay(inst.type, inst.value_si, prefs, inst.display_unit);
-  const bad = inst.status === "BAD" || inst.status === "UNDETERMINED";
-  const nm = inst.status === "NOT_MODELLED";
-  const oor = inst.status.startsWith("OUT_OF_RANGE");
-  const ring = bad ? COLORS.fault : nm ? COLORS.static : oor ? COLORS.partial : selected ? COLORS.accent : COLORS.muted;
-  const text = nm ? "N/M" : bad ? (inst.status === "BAD" ? "BAD" : "UNDET") : `${fmt(d.value, d.digits)}`;
-  const eps = RATE_EPS[inst.type] ?? Infinity;
-  const arrow = rate === null || Math.abs(rate) < eps ? null : rate > 0 ? "▲" : "▼";
-  const fast = rate !== null && Math.abs(rate) > 50 * eps;
+  const W = 104;
+  const H_HEAD = 14;
+  const H_ROW = 15;
+  const h = H_HEAD + rows.length * H_ROW + 2;
+  const x0 = at.x - W / 2;
+  const y0 = at.y - h / 2;
+  const pair = rows.length > 1;
+  const header = pair ? rows[0].inst.tag.replace(/^[A-Z]+-/, "PTT-") : rows[0].inst.tag;
+  const anySel = rows.some((r) => r.inst.tag === selectedTag);
+  const anyFast = rows.some((r) => r.rate !== null && Math.abs(r.rate) > 50 * (RATE_EPS[r.inst.type] ?? Infinity));
+  const worst = rows.find((r) => r.inst.status === "BAD" || r.inst.status === "UNDETERMINED")
+    ? COLORS.fault
+    : rows.find((r) => r.inst.status.startsWith("OUT_OF_RANGE"))
+      ? COLORS.partial
+      : null;
+  const steadyRow = rows.find((r) => r.steady !== null);
   return (
     <>
-    {/* leader line outside the clickable group: the target is the bubble + value box only */}
-    {target && <line x1={at.x} y1={at.y} x2={target.x} y2={target.y} stroke={COLORS.muted} strokeWidth={1} strokeDasharray="2 3" pointerEvents="none" />}
-    <g role="button" tabIndex={0} aria-label={`${inst.tag} ${inst.description}`} data-testid={`inst-${inst.tag}`} onClick={onClick}
-      onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && onClick()} className="cursor-pointer outline-none">
-      {/* generous invisible hit area (bubble + value box) */}
-      <rect x={at.x - 36} y={at.y - 17} width={72} height={52} fill="transparent" />
-      {fast && <circle cx={at.x} cy={at.y} r={18} fill="none" stroke={COLORS.accent} strokeWidth={1} className="halo" />}
-      <circle cx={at.x} cy={at.y} r={15} fill={SCH.bubble} stroke={ring} strokeWidth={selected ? 2 : 1.3} />
-      <line x1={at.x - 15} y1={at.y} x2={at.x + 15} y2={at.y} stroke={ring} strokeWidth={0.8} />
-      <text x={at.x} y={at.y - 3} textAnchor="middle" fontSize={8.5} fontWeight={700} fill={COLORS.fg}>
-        {prefix}
-      </text>
-      <text x={at.x} y={at.y + 10} textAnchor="middle" fontSize={8.5} fill={COLORS.fg}>
-        {num}
-      </text>
-      <rect x={at.x - 34} y={at.y + 18} width={68} height={15} rx={2} fill={SCH.valueBox} stroke={oor ? COLORS.partial : COLORS.line} strokeWidth={1} />
-      <text x={at.x} y={at.y + 29} textAnchor="middle" fontSize={10} className="num" fill={bad ? COLORS.fault : nm ? COLORS.static : oor ? COLORS.partial : SCH.valueText}>
-        {text} <tspan fill={COLORS.muted} fontSize={8}>{bad || nm ? "" : d.unit}</tspan>
-        {arrow && (
-          <tspan fill={arrow === "▲" ? COLORS.rise : COLORS.fall} fontSize={8}>
-            {" "}
-            {arrow}
-          </tspan>
-        )}
-      </text>
-      {steady !== null && (
-        <text x={at.x} y={at.y + 43} textAnchor="middle" fontSize={8.5} className="num" fill={COLORS.ref} data-testid={`ref-${inst.tag}`}>
-          → {fmt(steady, 1)} ss
+      {target && <line x1={at.x} y1={at.y} x2={target.x} y2={target.y} stroke={COLORS.muted} strokeWidth={1} strokeDasharray="2 3" pointerEvents="none" />}
+      <g data-testid={`tagbox-${header}`}>
+        {anyFast && <rect x={x0 - 3} y={y0 - 3} width={W + 6} height={h + 6} rx={6} fill="none" stroke={COLORS.accent} strokeWidth={1} className="halo" />}
+        <rect x={x0} y={y0} width={W} height={h} rx={4} fill={SCH.bubble} filter="url(#soft)"
+          stroke={anySel ? COLORS.accent : worst ?? COLORS.line} strokeWidth={anySel ? 2 : 1} />
+        <rect x={x0} y={y0} width={W} height={H_HEAD} rx={4} fill={SCH.bg2} />
+        <line x1={x0} y1={y0 + H_HEAD} x2={x0 + W} y2={y0 + H_HEAD} stroke={COLORS.line} strokeWidth={1} />
+        <text x={x0 + 6} y={y0 + 10.5} fontSize={9.5} fontWeight={700} fill={COLORS.fg} pointerEvents="none">
+          {header}
         </text>
-      )}
-    </g>
+        {rows.map((r, k) => {
+          const inst = r.inst;
+          const d =
+            r.litresPerHour && inst.value_si !== null
+              ? { value: inst.value_si * 3.6e6, unit: "L/h", digits: inst.value_si * 3.6e6 < 10 ? 2 : 0 }
+              : instrumentDisplay(inst.type, inst.value_si, prefs, inst.display_unit);
+          const bad = inst.status === "BAD" || inst.status === "UNDETERMINED";
+          const nm = inst.status === "NOT_MODELLED";
+          const oor = inst.status.startsWith("OUT_OF_RANGE");
+          const text = nm ? "N/M" : bad ? (inst.status === "BAD" ? "BAD" : "UNDET") : fmt(d.value, d.digits);
+          const eps = RATE_EPS[inst.type] ?? Infinity;
+          const arrow = r.rate === null || Math.abs(r.rate) < eps ? null : r.rate > 0 ? "▲" : "▼";
+          const ry = y0 + H_HEAD + k * H_ROW;
+          const sel = inst.tag === selectedTag;
+          return (
+            <g key={inst.tag} role="button" tabIndex={0} aria-label={`${inst.tag} ${inst.description}`} data-testid={`inst-${inst.tag}`}
+              onClick={() => onSelect(inst.tag)} onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && onSelect(inst.tag)}
+              className="cursor-pointer outline-none">
+              <rect x={x0 + 1} y={ry + 1} width={W - 2} height={H_ROW} fill={sel ? SCH.selected : "transparent"} />
+              {pair && (
+                <text x={x0 + 6} y={ry + 11} fontSize={7.5} fill={COLORS.muted}>
+                  {inst.type === "temperature" ? "T" : "P"}
+                </text>
+              )}
+              <text x={x0 + W - 6} y={ry + 11.5} textAnchor="end" fontSize={10.5} className="num" fill={bad ? COLORS.fault : nm ? COLORS.static : oor ? COLORS.partial : SCH.valueText}>
+                {arrow && (
+                  <tspan fill={arrow === "▲" ? COLORS.rise : COLORS.fall} fontSize={8}>
+                    {arrow}{" "}
+                  </tspan>
+                )}
+                {text} <tspan fill={COLORS.muted} fontSize={8.5}>{bad || nm ? "" : d.unit}</tspan>
+              </text>
+            </g>
+          );
+        })}
+        {steadyRow && (
+          <text x={at.x} y={y0 + h + 10} textAnchor="middle" fontSize={8.5} className="num" fill={COLORS.ref} data-testid={`ref-${steadyRow.inst.tag}`} pointerEvents="none">
+            → {fmt(steadyRow.steady, 1)} ss
+          </text>
+        )}
+      </g>
     </>
   );
 }
@@ -343,6 +374,28 @@ function TreeSchematicInner({ state, layout, selection, onSelect, prefs }: Props
     return Math.abs(ref - i.value_si) > 0.5e5 ? pressureFromPa(ref, prefs.pressureRef) : null;
   };
 
+  // transmitter tag boxes: a pressure + temperature pair at the same layout
+  // point share one PTT box (pressure first); everything else is its own box
+  const tagGroups: { key: string; at: LayoutPoint; rows: TagRow[] }[] = [];
+  {
+    const byPos = new Map<string, InstrumentSnapshot[]>();
+    for (const i of state.instruments) {
+      if (i.type === "concentration") continue;
+      const at = layout.instruments[i.tag];
+      if (!at) continue;
+      const k = `${at.x},${at.y}`;
+      byPos.set(k, [...(byPos.get(k) ?? []), i]);
+    }
+    const row = (i: InstrumentSnapshot): TagRow => ({ inst: i, rate: instRate(i), steady: instSteady(i), litresPerHour: chemTx.has(i.tag) });
+    for (const [k, list] of byPos) {
+      const at = layout.instruments[list[0].tag];
+      const p = list.find((i) => i.type === "pressure");
+      const t = list.find((i) => i.type === "temperature");
+      if (p && t && list.length === 2) tagGroups.push({ key: k, at, rows: [row(p), row(t)] });
+      else list.forEach((i, n) => tagGroups.push({ key: `${k}#${n}`, at, rows: [row(i)] }));
+    }
+  }
+
   // analyser stacks grouped by layout position
   const stacks = new Map<string, InstrumentSnapshot[]>();
   for (const i of state.instruments) {
@@ -439,14 +492,46 @@ function TreeSchematicInner({ state, layout, selection, onSelect, prefs }: Props
             <g key={i} pointerEvents="none">
               <rect x={a.x} y={a.y} width={a.w} height={a.h} rx={4} fill={SCH.boxFill} fillOpacity={0.6} stroke={COLORS.line} strokeWidth={1.2} strokeDasharray="6 3" />
               <text
-                x={a.label_position === "bottom" ? (a.x ?? 0) + (a.w ?? 0) - 6 : (a.x ?? 0) + 6}
+                x={a.label_position === "bottom" || a.label_position === "top-right" ? (a.x ?? 0) + (a.w ?? 0) - 6 : (a.x ?? 0) + 6}
                 y={a.label_position === "bottom" ? (a.y ?? 0) + (a.h ?? 0) - 6 : (a.y ?? 0) + 13}
-                textAnchor={a.label_position === "bottom" ? "end" : "start"}
+                textAnchor={a.label_position === "bottom" || a.label_position === "top-right" ? "end" : "start"}
                 fontSize={9.5} fontWeight={700} fill={COLORS.muted} letterSpacing={1.2}>
                 {a.label}
               </text>
             </g>
           );
+        if (a.type === "body")
+          return (
+            <rect key={i} x={a.x} y={a.y} width={a.w} height={a.h} rx={4} fill="#ede4d3" stroke="#cdb894" strokeWidth={1} pointerEvents="none" />
+          );
+        if (a.type === "cap")
+          return (
+            <g key={i} pointerEvents="none">
+              <rect x={a.x} y={a.y} width={a.w} height={a.h} rx={2} fill="#475569" />
+              <text x={(a.x ?? 0) + (a.w ?? 0) + 6} y={(a.y ?? 0) + 8} fontSize={9} fontWeight={700} fill={COLORS.muted} letterSpacing={1}>
+                {a.label}
+              </text>
+            </g>
+          );
+        if (a.type === "connector") {
+          // off-page connector (to SDU / host), pointing along the flow direction out of the page
+          const rot = { left: 180, right: 0, up: -90, down: 90 }[a.direction ?? "right"];
+          // label: above the line (default), below it, or beyond the connector tip
+          const beyond = a.label_at === "beyond";
+          const anchor = beyond ? (a.direction === "left" ? "end" : "start") : a.direction === "left" ? "start" : a.direction === "right" ? "end" : "middle";
+          const lx = beyond ? (a.x ?? 0) + (a.direction === "left" ? -18 : 18) : a.x;
+          const ly = beyond ? (a.y ?? 0) + 3.5 : a.label_at === "below" ? (a.y ?? 0) + 19 : (a.y ?? 0) - 11;
+          return (
+            <g key={i} pointerEvents="none">
+              <g transform={`translate(${a.x} ${a.y}) rotate(${rot})`}>
+                <polygon points="-2,-6 8,-6 14,0 8,6 -2,6" fill={SCH.bg} stroke={COLORS.muted} strokeWidth={1.3} strokeLinejoin="round" />
+              </g>
+              <text x={lx} y={ly} textAnchor={anchor} fontSize={9.5} fontWeight={600} fill={COLORS.muted}>
+                {a.label}
+              </text>
+            </g>
+          );
+        }
         if (a.type === "line")
           return (
             <g key={i} pointerEvents="none">
@@ -464,8 +549,8 @@ function TreeSchematicInner({ state, layout, selection, onSelect, prefs }: Props
         );
       })}
 
-      {/* pipes & flow paths */}
-      {state.elements.map((e) => {
+      {/* pipes & flow paths (branches first, so tees meet the production bore cleanly) */}
+      {[...state.elements.filter((x) => x.branch), ...state.elements.filter((x) => !x.branch)].map((e) => {
         const pts = elementPoints(e, layout);
         if (!pts) return null;
         const trapped = nodeState[e.from] === "trapped" && nodeState[e.to] === "trapped";
@@ -530,6 +615,7 @@ function TreeSchematicInner({ state, layout, selection, onSelect, prefs }: Props
         .map((n) => {
           const p = layout.nodes[n.id];
           if (!p || n.id === state.elements[0]?.from) return null;
+          if (layout.annotations.some((a) => a.type === "connector" && Math.abs((a.x ?? 0) - p.x) < 3 && Math.abs((a.y ?? 0) - p.y) < 3)) return null;
           return <circle key={n.id} cx={p.x} cy={p.y} r={5} fill={COLORS.flow} stroke={SCH.pipeOutline} strokeWidth={2} />;
         })}
 
@@ -539,30 +625,25 @@ function TreeSchematicInner({ state, layout, selection, onSelect, prefs }: Props
         if (!pts) return null;
         if (v.kind === "valve" || v.kind === "choke")
           return (
-            <ValveSymbol key={v.id} v={v as RestrictionSnapshot} at={pointAlong(pts, 0.5)} selected={selEl === v.id} small={!!v.branch}
+            <ValveSymbol key={v.id} v={v as RestrictionSnapshot} at={pointAlong(pts, layout.symbol_fraction?.[v.id] ?? 0.5)} selected={selEl === v.id} small={!!v.branch}
               onClick={() => onSelect({ type: "element", id: v.id })} />
           );
         if (v.kind === "check_valve")
-          return <CheckValveSymbol key={v.id} v={v as CheckValveSnapshot} at={pointAlong(pts, 0.5)} selected={selEl === v.id} onClick={() => onSelect({ type: "element", id: v.id })} />;
+          return <CheckValveSymbol key={v.id} v={v as CheckValveSnapshot} at={pointAlong(pts, layout.symbol_fraction?.[v.id] ?? 0.5)} selected={selEl === v.id} onClick={() => onSelect({ type: "element", id: v.id })} />;
         return null;
       })}
 
       {/* instruments */}
-      {state.instruments.map((i) => {
-        if (i.type === "concentration") return null;
-        const at = layout.instruments[i.tag];
-        if (!at) return null;
-        return (
-          <InstrumentBubble key={i.tag} inst={i} at={at} target={instTarget(i)} selected={selInst === i.tag} rate={instRate(i)} steady={instSteady(i)} litresPerHour={chemTx.has(i.tag)}
-            onClick={() => onSelect({ type: "instrument", tag: i.tag })} prefs={prefs} />
-        );
-      })}
+      {tagGroups.map((g) => (
+        <TagBox key={g.key} rows={g.rows} at={g.at} target={instTarget(g.rows[0].inst)} selectedTag={selInst} prefs={prefs}
+          onSelect={(tag) => onSelect({ type: "instrument", tag })} />
+      ))}
       {[...stacks.entries()].map(([k, items]) => (
         <AnalyserStack key={k} items={items} at={layout.instruments[items[0].tag]} target={instTarget(items[0])} prefs={prefs} colors={chemColors}
           selected={selInst} onSelect={(tag) => onSelect({ type: "instrument", tag })} />
       ))}
 
-      <Legend x={layout.width - 300} y={layout.height - (state.chemical_config?.length ? 104 : 74)} chems={state.chemical_config ?? []} dynamic={dynamic} />
+      <Legend x={layout.width - 300} y={state.chemical_config?.length ? 30 : layout.height - 74} chems={state.chemical_config ?? []} dynamic={dynamic} />
       <text x={12} y={16} fontSize={9.5} fontWeight={700} fill={COLORS.partial} letterSpacing={1.5}>
         SIMULATED VALUES — TRAINING ONLY
       </text>

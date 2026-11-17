@@ -58,6 +58,8 @@ const SUBTYPE: Record<string, string> = {
   scssv: "Surface-controlled subsurface safety valve",
   master: "Production master valve (gate)",
   wing: "Production wing valve (gate)",
+  swab: "Swab valve (vertical bore access, normally closed)",
+  service_line: "Annulus service line valve",
   isolation: "Isolation valve",
   choke: "Production choke",
   metering: "Chemical-injection metering valve",

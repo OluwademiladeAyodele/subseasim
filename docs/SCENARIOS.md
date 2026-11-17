@@ -90,7 +90,7 @@ The production path is unchanged. The dynamic additions are:
 
 | Scenario | Purpose (the intern performs the operation; every response is calculated) |
 |---|---|
-| `subsea_dynamic_base` | Full system: radial reservoir transient, A-annulus (AMV/AWV/XOV, service line), four chemical-injection circuits, tree-cavity transmitter, mid-line and arrival analysers. Default for new sessions. |
+| `subsea_dynamic_base` | Full system: radial reservoir transient; vertical Xmas tree with PMV, PWV, swab valve (SV-101) and tree cap (PT-105), production choke at the end of the wing; A-annulus (AMV/AWV/XOV) with the annulus service line valve (SLV-101) at the junction where the methanol line (MIV-301 / NRV-305) joins it; four chemical-injection circuits (metering valve outboard, isolation valve at the bore); tree-cavity transmitter; mid-line and arrival analysers. Default for new sessions. |
 | `dyn_a_pressure_buildup` | A. Close PWV-101 and watch PT-101 build up from ~98 bara toward ~221 bara (wellbore storage then reservoir diffusion). |
 | `dyn_b_valve_closure` | B. Production valve closure: upstream build-up, downstream drain-down, flow decay along the line. |
 | `dyn_c_methanol_injection` | C. Open CIV-301: methanol injection, mixing, transport to AT-510/511/512, mixing cooling at TT-103. |
