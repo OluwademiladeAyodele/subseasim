@@ -170,6 +170,45 @@ sc["black_oil"] = {
     "water_salinity_wt_pct": 3.5, "correlation": "beggs_brill",
 }
 
+# --- multiphase flow meter on the manifold (three-phase model) -------------
+sc["mpfm"] = {"tag": "MPFM-201", "name": "Manifold multiphase flow meter", "location_node": "N_ARR",
+              "inlet_diameter_m": 0.1016, "beta": 0.5, "discharge_coefficient": 0.995}
+
+# --- sand & choke inputs ---------------------------------------------------
+# Known data supplied by the operator: completion (cased, perforated, standalone
+# sand screens) and the production choke (plug & multi-hole cage, max Cv 161, min
+# controllable Cv 1.61, 165-step hydraulic stepping actuator). Everything else is
+# left EMPTY: predictions stay unavailable until the site data are entered.
+sc["sand_choke"] = {
+    "completion": {"completion_type": "cased_perforated_standalone_screens"},
+    "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500)", "max_cv": 161.0,
+              "min_controllable_cv": 1.61, "actuator_steps": 165, "erosion_feedback": True},
+    "detector": {"tag": "XT3001"},
+}
+# Complete ILLUSTRATIVE set (NOT field data) so training can run before site data exist.
+sc["sand_choke_example"] = {
+    "geomechanics": {"depth_tvd_m": 3700, "overburden_gradient_bar_m": 0.18, "min_horizontal_stress_gradient_bar_m": 0.15,
+                     "max_horizontal_stress_gradient_bar_m": 0.16, "initial_reservoir_pressure_bara": 380, "stress_path_coefficient": 0.6,
+                     "twc_strength_mpa": 27.0, "biot_coefficient": 0.9, "poisson_ratio": 0.25, "water_weakening_fraction": 0.3,
+                     "porosity": 0.27, "permeability_md": 800},
+    "completion": {"completion_type": "cased_perforated_standalone_screens", "perforation_diameter_mm": 18, "shot_density_spm": 40,
+                   "perforated_interval_m": 30, "screen_type": "premium_mesh", "screen_aperture_um": 250, "bridging_factor": 2.0},
+    "sand": {"grain_density_kg_m3": 2650, "d10_um": 60, "d50_um": 150, "d90_um": 300, "mode": "predictive",
+             "rate_coefficient_kg_m3": 0.05, "rate_exponent": 1.5, "measured_unit": "kg_d"},
+    "detector": {"tag": "XT3001"},
+    "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500) - ILLUSTRATIVE geometry",
+              "max_cv": 161.0, "min_controllable_cv": 1.61, "actuator_steps": 165, "stroke_mm": 60, "cage_inner_diameter_mm": 90,
+              "cage_wall_thickness_mm": 12, "plug_diameter_mm": 90, "choke_outlet_bore_mm": 127, "gallery_diameter_mm": 127,
+              "body_wall_thickness_mm": 25, "trim_material": "tungsten_carbide_cs10", "body_material": "inconel",
+              "trim_impact_angle_deg": 30, "plug_share": 0.3, "erosion_feedback": True,
+              "hole_rows": [{"axial_position_mm": 3, "diameter_mm": 4, "count": 4}, {"axial_position_mm": 8, "diameter_mm": 5, "count": 4},
+                            {"axial_position_mm": 14, "diameter_mm": 6, "count": 6}, {"axial_position_mm": 21, "diameter_mm": 8, "count": 6},
+                            {"axial_position_mm": 30, "diameter_mm": 10, "count": 8}, {"axial_position_mm": 41, "diameter_mm": 12, "count": 8},
+                            {"axial_position_mm": 53, "diameter_mm": 12, "count": 8}]},
+    "acceptance": {"max_hole_diameter_increase_mm": 1.5, "max_cv_increase_pct": 15, "max_plug_loss_mm": 2.0,
+                   "max_body_wall_loss_mm": 3.0, "max_outlet_wall_loss_mm": 3.0, "reference_step": 82},
+}
+
 # --- display tags (reference numbering) -----------------------------------
 V, U, P, A = "verified", "uncertain", "placeholder", "addition"
 alias = {
@@ -367,7 +406,7 @@ components = [
     {"id": "PCV3006-panel", "type": "choke_panel", "model": "element:CHOKE", **box(496, 124, 537, 167), "rotation": 0, "group": "downstream"},
     {"id": "XT3001", "type": "sand_detector", "model": None, **box(490, 175, 537, 195), "rotation": 0, "tap": p(CHKX, 184),
      "flow_path": "choke-outlet", "group": "downstream",
-     "note": "XT3001 on the reference (assumed acoustic sand detector). Sand production is not modelled yet - shown as not modelled."},
+     "note": "XT3001 on the reference (assumed acoustic sand detector on the choke outlet); reading from the sand-detector model."},
     comp("XT3001-body", "inline_device", None, (CHKX, 200), 90, flow_path="choke-outlet",
          note="Inline device on the choke outlet (reference). Associated with XT3001."),
     # --- selector valves (lower right)
@@ -392,6 +431,10 @@ components = [
     panel("PT-105", ["instrument:PT-105"], (556, 213, 646, 227), group="additions", note="Tree cap above the swab valve."),
     panel("PT-403", ["instrument:PT-403"], (556, 233, 646, 247), group="additions", note="Annulus service line downstream of SLV."),
     panel("PTT-201", ["instrument:PT-201", "instrument:TT-201"], (556, 384, 646, 413), group="additions", note="Flowline arrival at the manifold."),
+    # --- manifold multiphase flow meter (SubseaSim addition), inline before the manifold
+    {"id": "MPFM-201", "type": "mpfm", "model": "mpfm:MPFM-201", "x": p(585, 306)[0], "y": p(585, 306)[1], "w": 150.0, "h": 34.0,
+     "rotation": 90, "flow_path": "choke-outlet", "group": "additions",
+     "note": "Manifold multiphase flow meter (venturi + dual-energy gamma, representative model)."},
     # --- page buttons on the reference that have a working equivalent
     {"id": "btn-scm-diagnostic", "type": "button", "model": "page:diagnostics", **box(420, 74, 470, 87), "rotation": 0,
      "note": "SCM Diagnostic (reference) - opens the Diagnostics page."},

@@ -16,7 +16,8 @@ async function nav(page: Page, name: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("connection").first()).toHaveText("live");
+  // three-phase sessions take longer to create (PVT + steady multiphase march)
+  await expect(page.getByTestId("connection").first()).toHaveText("live", { timeout: 15_000 });
 });
 
 // Leave no session running at high speed behind (keeps the shared backend responsive).
@@ -173,4 +174,35 @@ test("three-phase production: phase rates, water-cut change, flow patterns", asy
   // the composition entering the well changes at once; the manifold still sees the old fluid
   await expect(wcTile).toContainText("WC 50.0 %", { timeout: 15_000 });
   await expect(page.getByTestId("mp-balance")).toContainText("Surface gas");
+});
+
+test("MPFM: measured vs true, fault injection and calibration", async ({ page }) => {
+  await page.getByTestId("mpfm-symbol").click();
+  await expect(page.getByTestId("mpfm-summary")).toBeVisible();
+  await page.getByRole("button", { name: "Open MPFM monitoring" }).click();
+  await expect(page.getByTestId("mpfm-page")).toBeVisible();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("GOOD");
+  await startFast(page, "60");
+  await page.getByRole("button", { name: "Gamma detector failed inject" }).click();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("BAD", { timeout: 15_000 });
+  await page.getByRole("button", { name: "Gamma detector failed clear" }).click();
+  await page.getByTestId("mpfm-calibrate").click();
+  await expect(page.getByTestId("mpfm-quality")).toHaveText("GOOD", { timeout: 15_000 });
+  await expect(page.getByTestId("mpfm-std-oil_sm3_d")).toContainText("±");
+});
+
+test("sand & choke: inputs drive the prediction, choke health and fast-forward", async ({ page }) => {
+  await nav(page, "Choke health");
+  await expect(page.getByTestId("health-category")).toHaveText("Unavailable");
+  await expect(page.getByTestId("unavailable")).toBeVisible();
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-max-hole")).toHaveValue("1.5", { timeout: 15_000 });
+  await nav(page, "Choke health");
+  await expect(page.getByTestId("health-category")).not.toHaveText("Unavailable", { timeout: 15_000 });
+  await expect(page.getByTestId("confidence")).toContainText("screening");
+  await page.getByTestId("fast-forward").click();
+  await expect(page.getByTestId("criterion-hole")).toBeVisible();
+  await nav(page, "Sand monitoring");
+  await expect(page.getByTestId("risk-index")).toBeVisible();
 });

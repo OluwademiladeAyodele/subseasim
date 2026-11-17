@@ -3,6 +3,9 @@
  * All physical values are SI: pressure Pa ABSOLUTE, differential Pa,
  * temperature K, flow m3/s. Conversion for display happens in lib/units.ts.
  */
+import type { ErosionMaterial, SandChokeInputs, SandChokeResults } from "./sand";
+
+export type { ErosionMaterial, SandChokeInputs, SandChokeResults } from "./sand";
 
 export type SimStatus = "ready" | "running" | "paused";
 export type SimMode = "steady" | "dynamic";
@@ -359,6 +362,50 @@ export interface MultiphaseReport {
   limitations: string[];
 }
 
+export interface MPFMValues {
+  oil_sm3_d: number;
+  gas_sm3_d: number;
+  water_sm3_d: number;
+  liquid_sm3_d: number;
+  oil_m3_d: number;
+  gas_m3_d: number;
+  water_m3_d: number;
+  liquid_m3_d: number;
+  mass_kg_s: number;
+  mixture_density_kg_m3: number;
+  water_cut: number;
+  gor_sm3_sm3: number;
+  gvf: number;
+  lvf: number;
+}
+
+export interface MPFMSnapshot {
+  tag: string;
+  name?: string;
+  quality: "GOOD" | "DEGRADED" | "BAD" | "NOT_READY" | "NOT_MODELLED";
+  reason?: string;
+  location_node?: string;
+  principle?: string;
+  geometry?: { inlet_diameter_m: number; beta: number; throat_diameter_m: number; discharge_coefficient: number };
+  flags?: { severity: "info" | "warning" | "error"; code: string; message: string }[];
+  measured?: MPFMValues | null;
+  true?: MPFMValues | null;
+  difference?: Partial<MPFMValues> | null;
+  uncertainty_pct?: Record<string, number> | null;
+  uncertainty_budget?: Record<string, Record<string, number>> | null;
+  signals?: { p_pa: number | null; t_k: number | null; dp_pa: number | null; attenuation_low: number | null; attenuation_high: number | null;
+    true_dp_pa: number | null; true_p_pa: number | null; true_t_k: number | null };
+  phase_fractions?: { measured: Record<string, number>; raw: Record<string, number>; true_gas_void_fraction: number | null } | null;
+  meter_slip_model?: string;
+  meter_pvt?: { oil_api: number; gas_specific_gravity: number; water_salinity_wt_pct: number; producing_gor_sm3_sm3: number; water_cut: number };
+  true_fluid?: { oil_api: number; gas_specific_gravity: number; water_salinity_wt_pct: number };
+  faults?: { dp_offset_bar: number; dp_stuck: boolean; gamma_failed: boolean; pt_failed: boolean };
+  calibration?: { last_s: number; days_since: number; interval_days: number; cd_actual: number; cd_drift_pct_per_year: number };
+  envelope?: { dp_min_bar: number; dp_max_bar: number; gvf_max: number };
+  reference_conditions?: string;
+  sand_effect?: string;
+}
+
 export type IntegrityType = "pressure_hold" | "inflow" | "stroke";
 
 export interface IntegrityTestSnapshot {
@@ -466,6 +513,12 @@ export interface SimulationState {
   /** fluid models this scenario supports (static) */
   fluid_models?: ("single_phase" | "black_oil")[];
   multiphase?: MultiphaseReport | null;
+  mpfm?: MPFMSnapshot | null;
+  sand_choke?: SandChokeResults | null;
+  /** static: inputs entered for this session (null = scenario has none) */
+  sand_choke_inputs?: SandChokeInputs | null;
+  sand_choke_example_available?: boolean;
+  erosion_materials?: ErosionMaterial[];
   chemical_config?: { id: string; name: string; color: string; display_unit: "ppm" | "vol%"; target_min: number | null; target_max: number | null }[];
   integrity?: { tests: IntegrityTestSnapshot[]; test_points: { transmitter: string; node: string; description: string }[] };
   integrity_presets?: IntegrityPreset[];

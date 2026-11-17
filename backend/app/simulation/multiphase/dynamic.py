@@ -58,6 +58,8 @@ ORIFICE_RELAX = 0.5
 UPDATE_DP_PA = 2.0e3
 UPDATE_DQ_REL = 1.0e-3
 UPDATE_MAX_SKIP = 30
+#: Sand channel of the composition transport grid.
+SAND_CH = 3
 
 
 class MultiphaseCoupling:
@@ -105,12 +107,15 @@ class MultiphaseCoupling:
         self.c_dz = net.gravity[self.c_li] / (zone_rho * G) if ck else np.zeros(0)
         # composition transport (stock-tank oil, surface gas, water mass fractions)
         g = dyn.grid
-        self.comp = TransportGrid(dyn.layout, dyn.topology, 3, cells_per_segment, node_volumes)
+        # channels 0-2: stock-tank oil, surface gas, water mass fractions; channel 3 (SAND_CH):
+        # sand mass per fluid mass, inlet value set each step by the sand-production model
+        self.comp = TransportGrid(dyn.layout, dyn.topology, 4, cells_per_segment, node_volumes)
         self.comp.mass_tracking = True
-        x = np.array(fluid.component_mass_fractions(gor, wc))
+        x = np.array(list(fluid.component_mass_fractions(gor, wc)) + [0.0])
         self.comp.c[:] = x[:, None]
         self.comp.c_left = x.copy()
         self.comp.c_right = x.copy()
+        self.comp.c_right[SAND_CH] = 0.0
         g.mass_tracking = True
         self.inventory0: np.ndarray | None = None
         # caches for reporting
@@ -129,7 +134,7 @@ class MultiphaseCoupling:
         self._last_P = None  # force a property update
         self.gor_res, self.wc_res = gor, wc
         x = np.array(self.fluid.component_mass_fractions(gor, wc))
-        self.comp.c_left = x.copy()
+        self.comp.c_left[:3] = x
 
     def node_composition(self) -> tuple[np.ndarray, np.ndarray]:
         """(GOR, WC) at every production hydraulic node."""

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { ChemicalCard } from "@/controls/ChemicalsPanel";
 import { ComponentPanel } from "@/controls/ComponentPanel";
 import { HydraulicsPanel } from "@/controls/HydraulicsPanel";
+import { MPFMSummary } from "@/pages/MPFMPage";
 
 import { useWorkstation } from "./context";
 
@@ -13,7 +14,7 @@ import { useWorkstation } from "./context";
  * right (symmetric path). No scrim: the process stays visible and usable.
  */
 export function Inspector() {
-  const { state, selection, select, selectTag, prefs, actions } = useWorkstation();
+  const { state, selection, select, selectTag, prefs, actions, go } = useWorkstation();
   const open = selection !== null;
   // keep rendering the last selection while the sheet animates out
   const last = useRef(selection);
@@ -37,7 +38,9 @@ export function Inspector() {
   const title =
     shown?.type === "instrument"
       ? "Transmitter"
-      : shown?.type === "selector" || shown?.type === "hydraulic"
+      : shown?.type === "mpfm"
+        ? "Multiphase flow meter"
+        : shown?.type === "selector" || shown?.type === "hydraulic"
         ? "Control hydraulics"
         : shown?.type === "chemical"
           ? "Chemical injection"
@@ -69,7 +72,9 @@ export function Inspector() {
         </button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {shown && (shown.type === "selector" || shown.type === "hydraulic") ? (
+        {shown?.type === "mpfm" ? (
+          state.mpfm ? <MPFMSummary m={state.mpfm} onOpen={() => { select(null); go("mpfm"); }} /> : null
+        ) : shown && (shown.type === "selector" || shown.type === "hydraulic") ? (
           <HydraulicsPanel state={state} prefs={prefs} focus={shown.type === "selector" ? shown.tag : shown.id}
             onSelector={actions.selector} onSupply={actions.supply} onSelect={selectTag} />
         ) : shown?.type === "chemical" ? (

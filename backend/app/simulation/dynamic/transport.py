@@ -264,7 +264,7 @@ class TransportGrid:
 
     # ------------------------------------------------------------------ step
     def step(self, dt: float | None, F: np.ndarray, dT_face: np.ndarray, injections: list[tuple[int, int, float, float, float]],
-             T_res: float, T_bnd: float, rhocp: float) -> None:
+             T_res: float, T_bnd: float, rhocp: float, thermal: bool = True) -> None:
         """Advance by dt (None -> steady state).
 
         injections: (chem index, cell index, Q_inj [m3/s], T_inj [K], (rho cp)_inj).
@@ -302,7 +302,9 @@ class TransportGrid:
         loss = self.ua / rhocp
         Vc = self.M if mt else self.V
         vth = Vc + self.mass / rhocp  # thermal "volume" incl. solid heat capacity
-        rate = np.maximum((inL + inR + src_c.sum(axis=0)) / Vc, (inL + inR + inj_q + loss) / vth)
+        rate = (inL + inR + src_c.sum(axis=0)) / Vc
+        if thermal:
+            rate = np.maximum(rate, (inL + inR + inj_q + loss) / vth)
         nsub = max(1, math.ceil(dt * float(rate.max()) / MAX_COURANT))
         h = dt / nsub
         c = self.c
@@ -325,6 +327,8 @@ class TransportGrid:
             self.out_boundary += h * np.maximum(flux[:, -1], 0.0)
             self.out_reservoir += h * np.maximum(-flux[:, 0], 0.0)
             self.in_boundary += h * (np.maximum(flux[:, 0], 0.0) + np.maximum(-flux[:, -1], 0.0))
+            if not thermal:
+                continue
             # temperature (advective)
             Tl = np.concatenate([[T_res], T[:-1]]) + dT_face[:-1]
             Tr = np.concatenate([T[1:], [T_bnd]]) + dT_face[1:]

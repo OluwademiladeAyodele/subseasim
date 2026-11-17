@@ -9,7 +9,7 @@ import type { Simulation } from "@/hooks/useSimulation";
 import type { DisplayPrefs } from "@/lib/units";
 import type { Selection } from "@/schematic/TreeSchematic";
 import { api, type IntegrityTestRequest } from "@/services/api";
-import type { ExerciseSummary, Layout, ScenarioInfo, SimMode, SimulationState, ValveCommand } from "@/types/simulation";
+import type { ExerciseSummary, Layout, SandChokeInputs, ScenarioInfo, SimMode, SimulationState, ValveCommand } from "@/types/simulation";
 
 import type { RouteId } from "./routes";
 
@@ -35,6 +35,11 @@ export interface Actions {
   selector: (tag: string, command: "open" | "close") => Promise<boolean>;
   blackOil: (body: Record<string, number | string>) => Promise<boolean>;
   fluidModel: (model: "single_phase" | "black_oil") => Promise<boolean>;
+  mpfmFaults: (body: Record<string, number | boolean>) => Promise<boolean>;
+  mpfmCalibrate: () => Promise<boolean>;
+  sandInputs: (body: SandChokeInputs) => Promise<boolean>;
+  sandExample: () => Promise<boolean>;
+  sandFastForward: (days: number) => Promise<boolean>;
   supply: (id: string, available: boolean) => Promise<boolean>;
   integrityStart: (req: IntegrityTestRequest) => Promise<boolean>;
   integrityAbort: (id: number) => Promise<boolean>;
@@ -120,6 +125,11 @@ export function WorkstationProvider({
       selector: (tag, c) => run((sid) => api.selector(sid, tag, c)),
       blackOil: (body) => run((sid) => api.blackOil(sid, body)),
       fluidModel: (m) => run((sid) => api.fluidModel(sid, m)),
+      mpfmFaults: (b) => run((sid) => api.mpfmFaults(sid, b)),
+      mpfmCalibrate: () => run((sid) => api.mpfmCalibrate(sid)),
+      sandInputs: (b) => run((sid) => api.sandInputs(sid, b)),
+      sandExample: () => run((sid) => api.sandExample(sid)),
+      sandFastForward: (d) => run((sid) => api.sandFastForward(sid, d)),
       supply: (id, a) => run((sid) => api.supply(sid, id, a)),
       integrityStart: (req) => run((sid) => api.integrityStart(sid, req)),
       integrityAbort: (id) => run((sid) => api.integrityAbort(sid, id)),

@@ -276,18 +276,25 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
           </Clickable>
         );
       }
-      case "sand_detector":
+      case "sand_detector": {
+        const det = state.sand_choke?.available ? state.sand_choke.detector : undefined;
+        const alarm = !!det?.alarm;
+        const txt = !det ? "three-phase model off" : det.reading_g_s == null ? det.status.toLowerCase().replace(/_/g, " ") : `${fmt(det.reading_g_s, 3)} g/s`;
         return (
           <g key={c.id} data-testid={`panel-${c.id}`}>
             {c.tap && <TapLeader c={c} />}
-            <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={XT.panel} stroke="#94a3b8" strokeWidth={0.9} strokeDasharray="1.5 1.5" />
-            <text x={c.x + 5} y={c.y + c.h / 2 + 3.5} fontSize={10} fontWeight={700} fill={XT.ink}>{c.id}</text>
-            <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 3.5} textAnchor="end" fontSize={9} fill={COLORS.static}>
-              <title>{c.note}</title>
-              not modelled
-            </text>
+            <Clickable id={c.id} label={`${c.id} sand detector`} selected={false} testid="sand-detector" onClick={() => onNavigate("sand")}>
+              <title>{det ? `${det.tag}: ${det.type.replace(/_/g, " ")} - click for sand monitoring` : c.note}</title>
+              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={alarm ? "#fee2e2" : XT.panel} stroke={alarm ? XT.closed : "#94a3b8"} strokeWidth={alarm ? 1.6 : 0.9}
+                strokeDasharray={det ? undefined : "1.5 1.5"} />
+              <text x={c.x + 5} y={c.y + c.h / 2 + 3.5} fontSize={10} fontWeight={700} fill={XT.ink}>{c.id}</text>
+              <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 3.5} textAnchor="end" fontSize={9.5} className="num" fill={alarm ? XT.closed : det ? XT.ink : COLORS.static}>
+                {txt}
+              </text>
+            </Clickable>
           </g>
         );
+      }
       case "header_panel": {
         const hp = hydPressure(c.model);
         const engTag = kind === "header" ? hyd?.headers.find((h) => h.id === id)?.tag : hyd?.supplies.find((s) => s.id === id)?.tag;
@@ -328,6 +335,32 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
             <text x={c.x + c.w / 2} y={c.y + c.h / 2 + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={XT.ink}>SCM Diagnostic</text>
           </Clickable>
         );
+      case "mpfm": {
+        const m = state.mpfm;
+        const sel = selection?.type === "mpfm";
+        const qcol = !m || m.quality === "NOT_MODELLED" ? COLORS.static : m.quality === "GOOD" ? XT.open : m.quality === "DEGRADED" ? XT.partial : XT.closed;
+        const meas = m?.measured;
+        return (
+          <Clickable key={c.id} id={c.id} label={`${m?.tag ?? c.id} multiphase flow meter`} selected={sel} testid="mpfm-symbol" onClick={() => onSelect({ type: "mpfm" })}>
+            <g transform={`translate(${c.x} ${c.y}) rotate(${c.rotation})`}>
+              <rect x={-16} y={-10} width={32} height={20} rx={4} fill={XT.panel} stroke={qcol} strokeWidth={2} />
+              <path d="M -12 -6 L -4 -2 L 4 -2 L 12 -6 M -12 6 L -4 2 L 4 2 L 12 6" fill="none" stroke="#475569" strokeWidth={1.2} />
+            </g>
+            {c.w > 0 && (
+              <g>
+                <rect x={c.x + c.w * 0 + 22} y={c.y - c.h / 2} width={c.w} height={c.h} rx={2} fill={sel ? SCH.selected : XT.panel}
+                  stroke={sel ? COLORS.accent : "#94a3b8"} strokeWidth={sel ? 2 : 0.9} strokeDasharray="3 2" filter="url(#xtsoft)" />
+                <circle cx={c.x + 30} cy={c.y - c.h / 2 + 9} r={3.5} fill={qcol} />
+                <text x={c.x + 37} y={c.y - c.h / 2 + 12} fontSize={10} fontWeight={700} fill={XT.ink}>{m?.tag ?? c.id}</text>
+                <text x={c.x + 22 + c.w - 5} y={c.y - c.h / 2 + 12} textAnchor="end" fontSize={8.5} fill={qcol}>{m?.quality ?? ""}</text>
+                <text x={c.x + 27} y={c.y + c.h / 2 - 6} fontSize={9.5} className="num" fill={XT.ink}>
+                  {meas ? `${fmt(meas.oil_sm3_d, 0)} Sm³/d oil · WC ${fmt(meas.water_cut * 100, 0)}%` : m?.quality === "NOT_MODELLED" ? "three-phase model off" : "—"}
+                </text>
+              </g>
+            )}
+          </Clickable>
+        );
+      }
       case "inline_device":
         return (
           <g key={c.id} transform={`translate(${c.x} ${c.y}) rotate(${c.rotation})`} pointerEvents="none">

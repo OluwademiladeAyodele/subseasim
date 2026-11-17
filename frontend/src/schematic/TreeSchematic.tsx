@@ -31,6 +31,7 @@ export type Selection =
   | { type: "selector"; tag: string }
   | { type: "chemical"; id: string }
   | { type: "hydraulic"; id: string }
+  | { type: "mpfm" }
   | null;
 
 interface Props {

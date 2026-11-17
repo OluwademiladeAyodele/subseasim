@@ -52,7 +52,9 @@ def test_every_valve_responds_and_snapshots_stay_valid(scenario, mode):
         if r.supports_intermediate:
             e.command_valve(tag, "set_position", 37.5)
             e.advance(a.time_to_target() + 2.0)
-            assert a.position_pct == pytest.approx(37.5)
+            # stepping actuators land on the nearest whole step
+            step = 100.0 / r.steps if getattr(r, "steps", None) else 1e-9
+            assert a.position_pct == pytest.approx(37.5, abs=step / 2 + 1e-9)
         # restore
         e.command_valve(tag, "open" if start >= 50 else "close")
         e.advance(a.time_to_target() + 2.0)

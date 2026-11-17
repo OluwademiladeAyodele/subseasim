@@ -7,7 +7,9 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from app.api.schemas import (
     BlackOilUpdate,
     BoundaryUpdate,
+    FastForwardRequest,
     FluidModelRequest,
+    MPFMFaultRequest,
     CreateSessionRequest,
     FluidUpdate,
     IntegrityTestRequest,
@@ -22,6 +24,7 @@ from app.api.schemas import (
     TrainingStartRequest,
     ValveCommandRequest,
 )
+from app.models.sand import SandChokeInputs
 from app.scenarios.loader import ScenarioNotFound, get_scenario, list_scenarios
 from app.sessions import Session, SessionLimitReached, manager
 from app.simulation.components.elements import CommandRejected
@@ -264,6 +267,53 @@ async def black_oil(sid: str, req: BlackOilUpdate) -> dict:
         raise HTTPException(409, str(exc)) from None
     except InvalidOperatingInput as exc:
         raise HTTPException(422, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/sand-choke/inputs")
+async def sand_inputs(sid: str, req: SandChokeInputs) -> dict:
+    s = _session(sid)
+    s.engine.set_sand_inputs(req)
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/example")
+async def sand_example(sid: str) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.load_sand_example()
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/fast-forward")
+async def sand_fast_forward(sid: str, req: FastForwardRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.sand_fast_forward(req.days)
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.put("/sessions/{sid}/mpfm/faults")
+async def mpfm_faults(sid: str, req: MPFMFaultRequest) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.set_mpfm_faults(**req.model_dump())
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/mpfm/calibrate")
+async def mpfm_calibrate(sid: str) -> dict:
+    s = _session(sid)
+    try:
+        s.engine.calibrate_mpfm()
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
     return await _after_change(s)
 
 

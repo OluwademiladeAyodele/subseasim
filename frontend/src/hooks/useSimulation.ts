@@ -83,6 +83,9 @@ export function useSimulation(): Simulation {
             tag_aliases: p.state.tag_aliases ?? prev.tag_aliases,
             fluid_models: p.state.fluid_models ?? prev.fluid_models,
             schematic: p.state.schematic !== undefined ? p.state.schematic : prev.schematic,
+            sand_choke_inputs: p.state.sand_choke_inputs !== undefined ? p.state.sand_choke_inputs : prev.sand_choke_inputs,
+            sand_choke_example_available: p.state.sand_choke_example_available ?? prev.sand_choke_example_available,
+            erosion_materials: p.state.erosion_materials ?? prev.erosion_materials,
           },
     );
     if (p.state.layout) setLayout(p.state.layout);

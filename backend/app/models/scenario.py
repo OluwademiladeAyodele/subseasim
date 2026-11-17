@@ -11,6 +11,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.sand import SandChokeInputs
+
 Positive = Annotated[float, Field(gt=0)]
 NonNeg = Annotated[float, Field(ge=0)]
 Percent = Annotated[float, Field(ge=0, le=100)]
@@ -58,6 +60,58 @@ class BlackOilConfig(_Strict):
     gas_cp_cv: Annotated[float, Field(gt=1.05, lt=1.67)] = 1.27
     #: Multiphase pressure-gradient correlation.
     correlation: Literal["beggs_brill", "no_slip"] = "beggs_brill"
+
+
+class MPFMMeterPVT(_Strict):
+    """Fluid characterisation programmed into the meter's flow computer
+    (normally from the last sample / well test). May differ from the true
+    fluid - a source of systematic measurement error."""
+
+    oil_api: Annotated[float, Field(ge=10, le=70)] | None = None
+    gas_specific_gravity: Annotated[float, Field(ge=0.55, le=1.5)] | None = None
+    water_salinity_wt_pct: Annotated[float, Field(ge=0, le=26)] | None = None
+    producing_gor_sm3_sm3: Annotated[float, Field(ge=0, le=2000)] | None = None
+    water_cut_fraction: Annotated[float, Field(ge=0, le=0.98)] | None = None
+
+
+class MPFMConfig(_Strict):
+    """Virtual multiphase flow meter - a REPRESENTATIVE venturi + dual-energy
+    gamma meter (not any manufacturer's algorithm). See
+    docs/MPFM_MEASUREMENT_MODEL.md."""
+
+    tag: str
+    name: str = "Multiphase flow meter"
+    #: Production-path node where the meter is installed.
+    location_node: str
+    inlet_diameter_m: Annotated[float, Field(gt=0.02, lt=0.6)] = 0.1016
+    beta: Annotated[float, Field(gt=0.3, lt=0.8)] = 0.5
+    discharge_coefficient: Annotated[float, Field(gt=0.8, le=1.0)] = 0.995
+    dp_min_bar: Positive = 0.02
+    dp_max_bar: Positive = 5.0
+    #: Upper GVF of the specified operating envelope.
+    gvf_max: Annotated[float, Field(gt=0.5, lt=1.0)] = 0.96
+    pressure_sigma_bar: NonNeg = 0.05
+    temperature_sigma_k: NonNeg = 0.2
+    #: dP transmitter noise, % of the dP upper range (1 sigma).
+    dp_sigma_pct_full_scale: NonNeg = 0.05
+    gamma_count_rate_low_cps: Positive = 2.0e5
+    gamma_count_rate_high_cps: Positive = 5.0e4
+    integration_time_s: Positive = 10.0
+    update_interval_s: Positive = 2.0
+    #: Slip model used by the flow computer.
+    meter_slip_model: Literal["chisholm", "homogeneous"] = "chisholm"
+    meter_pvt: MPFMMeterPVT = Field(default_factory=MPFMMeterPVT)
+    #: 1-sigma relative uncertainty of the meter's PVT densities / volume factors [%].
+    pvt_uncertainty_pct: NonNeg = 1.5
+    #: 1-sigma relative uncertainty of the discharge coefficient [%].
+    cd_uncertainty_pct: NonNeg = 0.5
+    #: Slip / flow-regime model uncertainty (1 sigma, % of total flow) vs GVF.
+    slip_uncertainty_table: list[tuple[float, float]] = Field(
+        default_factory=lambda: [(0.0, 0.3), (0.5, 1.5), (0.8, 3.0), (0.9, 5.0), (0.95, 8.0), (0.99, 20.0)])
+    calibration_interval_days: Positive = 180.0
+    #: Gradual change of the real discharge coefficient (erosion / deposits) [% per year].
+    cd_drift_pct_per_year: float = 0.0
+    seed: int = 1
 
 
 class ReservoirConfig(_Strict):
@@ -547,6 +601,12 @@ class ScenarioConfig(_Strict):
     #: Default fluid model: single-phase constant-property liquid (simplified,
     #: Release 1) or three-phase black oil with multiphase flow.
     fluid_model: Literal["single_phase", "black_oil"] = "single_phase"
+    #: Sand production / detection / choke-erosion INPUTS (site data; missing = unavailable).
+    sand_choke: SandChokeInputs | None = None
+    #: Complete ILLUSTRATIVE input set for training ("load example" in the app).
+    sand_choke_example: SandChokeInputs | None = None
+    #: Virtual multiphase flow meter (three-phase fluid model only).
+    mpfm: MPFMConfig | None = None
     #: Engineering tag -> display tag (reference HMI numbering).
     tag_aliases: dict[str, TagAliasConfig] = Field(default_factory=dict)
     #: Subsea control hydraulics (selector valves, SCM headers, fail-safe).

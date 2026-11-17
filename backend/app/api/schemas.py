@@ -60,6 +60,17 @@ class BlackOilUpdate(_Req):
     correlation: Literal["beggs_brill", "no_slip"] | None = None
 
 
+class MPFMFaultRequest(_Req):
+    dp_offset_bar: Annotated[float, Field(ge=-1, le=1)] | None = None
+    dp_stuck: bool | None = None
+    gamma_failed: bool | None = None
+    pt_failed: bool | None = None
+
+
+class FastForwardRequest(_Req):
+    days: Annotated[float, Field(gt=0, le=3650)]
+
+
 class FluidModelRequest(_Req):
     model: Literal["single_phase", "black_oil"]
 

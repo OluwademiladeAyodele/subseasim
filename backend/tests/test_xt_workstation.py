@@ -51,6 +51,7 @@ def test_every_layout_model_reference_resolves(scenario, layout):
         "element": elements, "instrument": instruments, "chemical": chems,
         "selector": {s.tag for s in hyd.selector_valves}, "header": {h.id for h in hyd.headers},
         "supply": {s.id for s in hyd.supplies}, "page": {"diagnostics"},
+        "mpfm": {scenario.mpfm.tag} if scenario.mpfm else set(),
     }
     for c in layout.components:
         for ref in [c.model, *c.models]:

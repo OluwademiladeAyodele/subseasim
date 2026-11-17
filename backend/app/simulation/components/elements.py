@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from app.core.units import loss_coefficient_to_capacity
+import numpy as np
+
+from app.core.units import cv_to_capacity, loss_coefficient_to_capacity
 from app.simulation.choke.choke import choke_capacity
 from app.simulation.flowline.pipe import PipeGeometry, pipe_pressure_drop
 from app.simulation.hydraulics.properties import FlowProperties
@@ -152,13 +154,43 @@ class ValveElement(RestrictionElement):
 class ChokeElement(RestrictionElement):
     cv_max: float = 100.0
     service: str = "production"
+    #: Vendor Cv vs opening table [(position %, Cv), ...] for the NEW trim;
+    #: replaces the generic characteristic when given.
+    cv_table: list[tuple[float, float]] | None = None
+    #: Stepping actuator: number of steps for full travel (positions are
+    #: quantised to whole steps); None = continuous.
+    steps: int | None = None
+    #: Trim wear: capacity multiplier as a function of position (eroded /
+    #: new open flow area), set by the choke-erosion model. None = new trim.
+    wear_factor: object | None = None
 
     def __post_init__(self) -> None:
         self.kind = "choke"
         self.subtype = "choke" if self.service == "production" else "metering"
 
+    def nominal_cv_at(self, position_pct: float) -> float:
+        if self.cv_table:
+            xs = [p for p, _ in self.cv_table]
+            ys = [c for _, c in self.cv_table]
+            if position_pct <= 0.0:
+                return 0.0
+            return float(np.interp(position_pct, xs, ys))
+        return self.cv_max * relative_capacity(self.characteristic, position_pct / 100.0, self.rangeability)
+
     def capacity_at(self, position_pct: float) -> float:
-        return choke_capacity(self.cv_max, position_pct, self.characteristic, self.rangeability)
+        if self.cv_table:
+            c = cv_to_capacity(self.nominal_cv_at(position_pct))
+        else:
+            c = choke_capacity(self.cv_max, position_pct, self.characteristic, self.rangeability)
+        if self.wear_factor is not None and c > 0:
+            c *= float(self.wear_factor(position_pct))  # type: ignore[operator]
+        return c
+
+    def validate_command(self, command: str, position_pct: float | None) -> float:
+        target = super().validate_command(command, position_pct)
+        if self.steps:
+            target = round(target / 100.0 * self.steps) / self.steps * 100.0
+        return target
 
 
 @dataclass

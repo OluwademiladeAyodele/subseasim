@@ -451,7 +451,7 @@ class DynamicModel:
                 r.cum_m3 += max(float(net.Q[r.link]), 0.0) * dt
         self.grid.step(dt, F, dT, inj, self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
         if self.mp is not None:
-            self.mp.comp.step(dt, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp)
+            self.mp.comp.step(dt, F, np.zeros(self.grid.n + 1), [], self.ipr.t_res, self.t_boundary_fluid, self.rhocp, thermal=False)
         self._update_node_temperatures(dt)
         self.max_rate_pa_s = float(np.max(np.abs(net.P - P_old)[~net.fixed])) / dt if net.n else 0.0
         self.p_prev = P_old

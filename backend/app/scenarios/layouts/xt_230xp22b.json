@@ -1336,7 +1336,7 @@
       ],
       "flow_path": "choke-outlet",
       "group": "downstream",
-      "note": "XT3001 on the reference (assumed acoustic sand detector). Sand production is not modelled yet - shown as not modelled."
+      "note": "XT3001 on the reference (assumed acoustic sand detector on the choke outlet); reading from the sand-detector model."
     },
     {
       "id": "XT3001-body",
@@ -1581,6 +1581,19 @@
       "rotation": 0,
       "group": "additions",
       "note": "Flowline arrival at the manifold."
+    },
+    {
+      "id": "MPFM-201",
+      "type": "mpfm",
+      "model": "mpfm:MPFM-201",
+      "x": 1469.0,
+      "y": 691.6,
+      "w": 150.0,
+      "h": 34.0,
+      "rotation": 90,
+      "flow_path": "choke-outlet",
+      "group": "additions",
+      "note": "Manifold multiphase flow meter (venturi + dual-energy gamma, representative model)."
     },
     {
       "id": "btn-scm-diagnostic",
