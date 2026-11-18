@@ -33,3 +33,18 @@ def _sand_fast_forward(session, params: dict):
 
 jobs.register("sand_fast_forward", _sand_fast_forward)
 
+
+def _scenario_comparison(session, params: dict):
+    from pydantic import ValidationError
+
+    from app.studies.comparison import StudyRequest, run_study
+
+    try:
+        req = StudyRequest.model_validate(params)
+    except ValidationError as exc:
+        raise JobRejected("; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())) from None
+    n = len(req.variants) + 1
+    return f"Scenario comparison: {n} cases over {req.horizon_days:g} days", run_study(session.engine, req)
+
+
+jobs.register("scenario_comparison", _scenario_comparison)

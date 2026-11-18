@@ -88,8 +88,8 @@ export const api = {
   getJob: (id: string) => request<Job>("GET", `/api/jobs/${id}`),
   cancelJob: (id: string) => request<Job>("POST", `/api/jobs/${id}/cancel`),
   listJobs: (sid: string) => request<Job[]>("GET", `/api/sessions/${sid}/jobs`),
-  saveRecord: (sid: string, label: string, notes: string | null) =>
-    request<RecordSummary>("POST", `/api/sessions/${sid}/records`, { label, notes }),
+  saveRecord: (sid: string, label: string, notes: string | null, comparisonJobId?: string) =>
+    request<RecordSummary>("POST", `/api/sessions/${sid}/records`, { label, notes, comparison_job_id: comparisonJobId ?? null }),
   listRecords: (scenarioId?: string) => request<RecordSummary[]>("GET", `/api/records${scenarioId ? `?scenario_id=${encodeURIComponent(scenarioId)}` : ""}`),
   getRecord: (id: string) => request<SimulationRecord>("GET", `/api/records/${id}`),
   deleteRecord: (id: string) => request<null>("DELETE", `/api/records/${id}`),

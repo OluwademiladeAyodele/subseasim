@@ -337,6 +337,14 @@ async def save_record(sid: str, req: RecordRequest) -> dict:
     """Save the current assessment of a session as an immutable record."""
     s = _session(sid)
     body = assessment.build_record(s.engine, sid)
+    if req.comparison_job_id:
+        try:
+            job = jobs.get(req.comparison_job_id)
+        except KeyError:
+            raise HTTPException(404, f"job {req.comparison_job_id} not found") from None
+        if job.session_id != sid or job.kind != "scenario_comparison" or job.state != "completed":
+            raise HTTPException(409, "only a COMPLETED scenario comparison of this session can be attached")
+        body["comparison"] = job.result
     row = records.save(body, req.label.strip(), req.notes)
     s.engine.events.add(s.engine.time_s, "instrument", f"Simulation record saved: '{row['label']}'")
     await s.broadcast()
@@ -367,6 +375,22 @@ def export_record(rid: str) -> Response:
     name = "".join(c if c.isalnum() or c in "-_" else "_" for c in body["label"])[:60] or "record"
     return Response(json.dumps(body, indent=2), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="subseasim_{name}_{rid[:8]}.json"'})
+
+
+@router.get("/records/{rid}/report")
+def record_report(rid: str, download: bool = False) -> Response:
+    """Printable engineering report (HTML) of a saved record."""
+    from app.reports.report import render
+
+    try:
+        body = records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    headers = {}
+    if download:
+        name = "".join(c if c.isalnum() or c in "-_" else "_" for c in body["label"])[:60] or "report"
+        headers["Content-Disposition"] = f'attachment; filename="subseasim_report_{name}_{rid[:8]}.html"'
+    return Response(render(body), media_type="text/html; charset=utf-8", headers=headers)
 
 
 @router.delete("/records/{rid}", status_code=204)

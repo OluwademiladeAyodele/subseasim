@@ -3,7 +3,7 @@
  * methods, provenance, uncertainty, validation) to the server database,
  * browse, inspect, export as JSON and delete. Records are immutable.
  */
-import { Download, Save, Trash2 } from "lucide-react";
+import { Download, FileText, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { useWorkstation } from "@/app/context";
@@ -86,13 +86,17 @@ export function RecordsPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className={`border-t border-line ${sel?.id === r.id ? "bg-accent/[0.06]" : ""}`}>
                     <td className="num py-1 pr-2">{r.created_at.replace("T", " ").slice(0, 16)}</td>
-                    <td className="py-1 pr-2"><button type="button" className="text-left font-semibold text-accent hover:underline" onClick={() => open(r.id)}>{r.label}</button></td>
+                    <td className="py-1 pr-2">
+                      <button type="button" className="text-left font-semibold text-accent hover:underline" onClick={() => open(r.id)}>{r.label}</button>
+                      {r.has_comparison ? <Badge tone="info" className="ml-1">comparison</Badge> : null}
+                    </td>
                     <td className="py-1 pr-2">{r.scenario_name ?? r.scenario_id}</td>
                     <td className="num py-1 pr-2">{simTime(r.sim_time_s)}</td>
                     <td className="py-1 pr-2">{r.health_category ?? "—"}</td>
                     <td className="py-1 pr-2 text-muted">{r.validation_status}</td>
                     <td className="py-1 text-right">
-                      <a className="inline-flex px-1 text-muted hover:text-fg" href={`/api/records/${r.id}/export`} aria-label={`export ${r.label}`}><Download size={14} /></a>
+                      <a className="inline-flex px-1 text-muted hover:text-fg" href={`/api/records/${r.id}/report`} target="_blank" rel="noreferrer" aria-label={`report ${r.label}`} title="Engineering report (print to PDF)"><FileText size={14} /></a>
+                      <a className="inline-flex px-1 text-muted hover:text-fg" href={`/api/records/${r.id}/export`} aria-label={`export ${r.label}`} title="Export JSON"><Download size={14} /></a>
                       <Button size="xs" variant="ghost" aria-label={`delete ${r.label}`} onClick={() => remove(r.id)}><Trash2 size={13} /></Button>
                     </td>
                   </tr>
@@ -149,6 +153,9 @@ function RecordDetail({ r }: { r: SimulationRecord }) {
         </div>
       </div>
       {r.notes && <p className="mt-2 text-[12.5px]">Notes: {r.notes}</p>}
+      <a className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-accent hover:underline" href={`/api/records/${r.id}/report`} target="_blank" rel="noreferrer" data-testid="record-report-link">
+        <FileText size={14} />Open the engineering report{r.comparison ? " (with the scenario comparison)" : ""}
+      </a>
       <details className="mt-2 text-[12px] text-dim">
         <summary className="cursor-pointer">Assumptions ({r.assumptions.length})</summary>
         <ul className="mt-1 list-disc pl-5">{r.assumptions.map((a) => <li key={a}>{a}</li>)}</ul>

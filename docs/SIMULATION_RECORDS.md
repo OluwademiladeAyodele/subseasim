@@ -75,7 +75,7 @@ equations or constants change. `APP_VERSION` is stamped on every record.
   are lost at every redeploy.
 - Table `simulation_records` holds the summary columns used for listing,
   plus the full record as JSON in `body`.
-- Table `meta` holds `schema_version`.
+- Table `meta` holds `schema_version` (2: `has_comparison`; version-1 files are migrated in place).
 
 ## API
 

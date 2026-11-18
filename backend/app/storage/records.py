@@ -22,7 +22,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: has_comparison column (migrated in place from 1)
 _DEFAULT = Path(__file__).resolve().parent.parent.parent / "data" / "records.sqlite"
 _lock = threading.Lock()
 
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS simulation_records (
     app_version TEXT NOT NULL,
     validation_status TEXT NOT NULL,
     health_category TEXT,
+    has_comparison INTEGER NOT NULL DEFAULT 0,
     body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_records_created ON simulation_records (created_at);
@@ -47,7 +48,7 @@ CREATE INDEX IF NOT EXISTS ix_records_scenario ON simulation_records (scenario_i
 """
 
 SUMMARY_COLS = ("id", "created_at", "label", "notes", "scenario_id", "scenario_name", "session_id", "sim_time_s",
-                "app_version", "validation_status", "health_category")
+                "app_version", "validation_status", "health_category", "has_comparison")
 
 
 class RecordNotFound(KeyError):
@@ -67,11 +68,20 @@ def _connect():
         try:
             con.row_factory = sqlite3.Row
             con.executescript(_SCHEMA)
-            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+            _migrate(con)
             yield con
             con.commit()
         finally:
             con.close()
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    """Bring an older database to SCHEMA_VERSION in place (records are kept)."""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(simulation_records)")}
+    if "has_comparison" not in cols:  # 1 -> 2
+        con.execute("ALTER TABLE simulation_records ADD COLUMN has_comparison INTEGER NOT NULL DEFAULT 0")
+    con.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (str(SCHEMA_VERSION),))
 
 
 def save(body: dict, label: str, notes: str | None = None) -> dict:
@@ -83,7 +93,8 @@ def save(body: dict, label: str, notes: str | None = None) -> dict:
     row = {"id": rid, "created_at": now, "label": label, "notes": notes, "scenario_id": hdr["scenario_id"],
            "scenario_name": hdr.get("scenario_name"), "session_id": hdr.get("session_id"), "sim_time_s": hdr["sim_time_s"],
            "app_version": hdr["app_version"], "validation_status": body["validation"]["overall"],
-           "health_category": (body["results"].get("choke_health") or {}).get("category")}
+           "health_category": (body["results"].get("choke_health") or {}).get("category"),
+           "has_comparison": 1 if body.get("comparison") else 0}
     with _connect() as con:
         con.execute(f"INSERT INTO simulation_records ({', '.join(SUMMARY_COLS)}, body) VALUES "
                     f"({', '.join('?' for _ in SUMMARY_COLS)}, ?)", (*[row[c] for c in SUMMARY_COLS], json.dumps(body)))

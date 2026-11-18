@@ -12,6 +12,7 @@ export interface RecordSummary {
   app_version: string;
   validation_status: string;
   health_category: string | null;
+  has_comparison: number;
 }
 
 export interface ModelEntry {
@@ -50,5 +51,6 @@ export interface SimulationRecord {
   methods: Record<string, ModelEntry>;
   assumptions: string[];
   uncertainty: Record<string, unknown>;
+  comparison?: unknown;
   validation: { overall: string; model_status_range: string | null; erosion_confidence: string | null; data_classification: string; statement: string };
 }

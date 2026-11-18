@@ -284,3 +284,26 @@ test("background job: a 10-year fast-forward runs without freezing the workstati
   await nav(page, "Event history");
   await expect(page.getByTestId("event-log")).toContainText("fast-forward STOPPED after");
 });
+
+test("scenario comparison: run a study, save it with a record and open the engineering report", async ({ page, context }) => {
+  test.setTimeout(150_000);
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-max-hole")).toHaveValue("1.5", { timeout: 15_000 });
+  await nav(page, "Scenario comparison");
+  await page.getByLabel("Wear horizon days").fill("90");
+  await page.getByTestId("run-comparison").click();
+  await expect(page.getByTestId("job-state")).toHaveText("completed", { timeout: 90_000 });
+  const results = page.getByTestId("comparison-results");
+  await expect(results).toContainText("Choke 60 %");
+  await expect(results).toContainText("Remaining life P50 after horizon");
+  const label = `e2e study ${Date.now()}`;
+  await page.getByLabel("Comparison record label").fill(label);
+  await page.getByTestId("save-comparison").click();
+  const link = page.getByTestId("comparison-report-link");
+  await expect(link).toBeVisible();
+  const [report] = await Promise.all([context.waitForEvent("page"), link.click()]);
+  await expect(report.getByRole("heading", { level: 1 })).toContainText(label);
+  await expect(report.getByText("12. Scenario comparison")).toBeVisible();
+  await expect(report.getByText(/Validation status: Verified models, not field-validated/)).toBeVisible();
+});

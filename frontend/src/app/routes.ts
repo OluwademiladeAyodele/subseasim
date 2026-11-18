@@ -16,6 +16,7 @@ import {
   ClipboardList,
   ToggleRight,
   Archive,
+  GitCompare,
 } from "lucide-react";
 
 export type RouteId =
@@ -35,6 +36,7 @@ export type RouteId =
   | "sandinputs"
   | "scenario"
   | "records"
+  | "comparison"
   | "training";
 
 export interface RouteDef {
@@ -63,6 +65,7 @@ export const ROUTES: RouteDef[] = [
   { id: "diagnostics", label: "Diagnostics", description: "Solver status and model-validity checks", icon: Stethoscope, group: "Monitor", key: "8" },
   { id: "conditions", label: "Conditions", description: "Reservoir, boundary and fluid properties", icon: SlidersHorizontal, group: "Configure", key: "9" },
   { id: "sandinputs", label: "Sand & choke inputs", description: "Reservoir, geomechanics, completion, sand, choke trim, acceptance criteria, history and inspections", icon: ClipboardList, group: "Configure" },
+  { id: "comparison", label: "Scenario comparison", description: "Compare operating options with the same models: production, sanding, erosion life, cavitation", icon: GitCompare, group: "Configure" },
   { id: "records", label: "Simulation records", description: "Saved assessments: inputs, results, methods, provenance, uncertainty and validation", icon: Archive, group: "Configure" },
   { id: "scenario", label: "Scenario & model", description: "Training scenarios and simulation model", icon: Settings2, group: "Configure" },
   { id: "training", label: "Training", description: "Guided exercises with assessment", icon: BookOpen, group: "Learn" },

@@ -75,6 +75,8 @@ class JobRequest(_Req):
 class RecordRequest(_Req):
     label: Annotated[str, Field(min_length=1, max_length=120)]
     notes: Annotated[str, Field(max_length=2000)] | None = None
+    #: Attach the result of a completed scenario-comparison job of this session.
+    comparison_job_id: Annotated[str, Field(max_length=64)] | None = None
 
 
 class SandCsvRequest(_Req):
