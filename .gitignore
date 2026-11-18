@@ -158,3 +158,6 @@ venv/
 # Playwright / test output
 test-results/
 playwright-report/
+
+# Simulation records database (local runs)
+backend/data/

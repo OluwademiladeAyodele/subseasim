@@ -73,6 +73,9 @@ Every push to `main` redeploys. Things to know:
   replica would split users between two servers.
 * **Redeploys reset running simulations.** Open browsers recover automatically and start a
   fresh session, with a notice.
+* **Simulation records** are stored in SQLite at `/app/data/records.sqlite`. Add a Railway
+  **volume mounted at `/app/data`** to keep them across redeploys; without it they are lost.
+  See [docs/SIMULATION_RECORDS.md](docs/SIMULATION_RECORDS.md).
 * **CPU:** one session at 600× uses about half a CPU core. Size the plan for the number of
   trainees who run at high speed at the same time.
 
@@ -127,6 +130,7 @@ Engineering parameters live only in scenario files.
 * [Dynamic simulation model](docs/DYNAMIC_SIMULATION_MODEL.md): Release 2 overview, audit, verification
 * [Pipeline transient model](docs/PIPELINE_TRANSIENT_MODEL.md) · [Chemical transport](docs/CHEMICAL_TRANSPORT_MODEL.md) · [Instrument response](docs/INSTRUMENT_RESPONSE_MODEL.md) · [Simulation time](docs/SIMULATION_TIME_MANAGEMENT.md)
 * [Engineering validation](docs/ENGINEERING_VALIDATION.md) · [Choke erosion](docs/CHOKE_EROSION_MODEL.md) · [Choke maintenance](docs/CHOKE_MAINTENANCE_MODEL.md) · [Choke cavitation](docs/CHOKE_CAVITATION_MODEL.md)
+* [Simulation records](docs/SIMULATION_RECORDS.md): saved assessments, provenance, model versions
 * [Architecture](docs/ARCHITECTURE.md)
 * [Engineering assumptions](docs/ENGINEERING_ASSUMPTIONS.md): units, equations, limitations
 * [Simulation model](docs/SIMULATION_MODEL.md): modules, step sequence, CoolProp evaluation

@@ -1,0 +1,117 @@
+"""Simulation records: a durable, traceable store of what was simulated.
+
+One record = one saved assessment of a session: the input conditions, the
+results, the calculation methods and model versions, the assumptions, the
+uncertainty, the validation status and the PROVENANCE of every input group
+(measured / estimated / simulated / imported / illustrative / configured).
+
+Storage is SQLite through the Python standard library (no extra service).
+The file is ``$SUBSEASIM_DB_PATH`` (default ``backend/data/records.sqlite``),
+read at call time so tests and deployments can point elsewhere. Records are
+immutable once written (no update API): a new assessment is a new record.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import threading
+import uuid
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+
+SCHEMA_VERSION = 1
+_DEFAULT = Path(__file__).resolve().parent.parent.parent / "data" / "records.sqlite"
+_lock = threading.Lock()
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS simulation_records (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    label TEXT NOT NULL,
+    notes TEXT,
+    scenario_id TEXT NOT NULL,
+    scenario_name TEXT,
+    session_id TEXT,
+    sim_time_s REAL NOT NULL,
+    app_version TEXT NOT NULL,
+    validation_status TEXT NOT NULL,
+    health_category TEXT,
+    body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_records_created ON simulation_records (created_at);
+CREATE INDEX IF NOT EXISTS ix_records_scenario ON simulation_records (scenario_id);
+"""
+
+SUMMARY_COLS = ("id", "created_at", "label", "notes", "scenario_id", "scenario_name", "session_id", "sim_time_s",
+                "app_version", "validation_status", "health_category")
+
+
+class RecordNotFound(KeyError):
+    pass
+
+
+def db_path() -> Path:
+    return Path(os.environ.get("SUBSEASIM_DB_PATH") or _DEFAULT)
+
+
+@contextmanager
+def _connect():
+    p = db_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with _lock:
+        con = sqlite3.connect(p, timeout=10)
+        try:
+            con.row_factory = sqlite3.Row
+            con.executescript(_SCHEMA)
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+            yield con
+            con.commit()
+        finally:
+            con.close()
+
+
+def save(body: dict, label: str, notes: str | None = None) -> dict:
+    """Store a record body (see app.storage.assessment.build_record). Returns the summary."""
+    rid = uuid.uuid4().hex
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    body = {**body, "id": rid, "created_at": now, "label": label, "notes": notes}
+    hdr = body["header"]
+    row = {"id": rid, "created_at": now, "label": label, "notes": notes, "scenario_id": hdr["scenario_id"],
+           "scenario_name": hdr.get("scenario_name"), "session_id": hdr.get("session_id"), "sim_time_s": hdr["sim_time_s"],
+           "app_version": hdr["app_version"], "validation_status": body["validation"]["overall"],
+           "health_category": (body["results"].get("choke_health") or {}).get("category")}
+    with _connect() as con:
+        con.execute(f"INSERT INTO simulation_records ({', '.join(SUMMARY_COLS)}, body) VALUES "
+                    f"({', '.join('?' for _ in SUMMARY_COLS)}, ?)", (*[row[c] for c in SUMMARY_COLS], json.dumps(body)))
+    return row
+
+
+def list_records(scenario_id: str | None = None, limit: int = 100) -> list[dict]:
+    q = f"SELECT {', '.join(SUMMARY_COLS)} FROM simulation_records"
+    args: list = []
+    if scenario_id:
+        q += " WHERE scenario_id = ?"
+        args.append(scenario_id)
+    q += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+    args.append(max(1, min(limit, 1000)))
+    with _connect() as con:
+        return [dict(r) for r in con.execute(q, args)]
+
+
+def get(rid: str) -> dict:
+    with _connect() as con:
+        r = con.execute("SELECT body FROM simulation_records WHERE id = ?", (rid,)).fetchone()
+    if r is None:
+        raise RecordNotFound(rid)
+    return json.loads(r["body"])
+
+
+def delete(rid: str) -> None:
+    with _connect() as con:
+        n = con.execute("DELETE FROM simulation_records WHERE id = ?", (rid,)).rowcount
+    if n == 0:
+        raise RecordNotFound(rid)

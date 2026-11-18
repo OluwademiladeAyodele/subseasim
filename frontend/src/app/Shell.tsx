@@ -7,6 +7,7 @@ import { ConditionsPage } from "@/pages/ConditionsPage";
 import { ChokeHealthPage } from "@/pages/ChokeHealthPage";
 import { MPFMPage } from "@/pages/MPFMPage";
 import { SandInputsPage } from "@/pages/SandInputsPage";
+import { RecordsPage } from "@/pages/RecordsPage";
 import { SandPage } from "@/pages/SandPage";
 import { MultiphasePage } from "@/pages/MultiphasePage";
 import { DiagnosticsPage } from "@/pages/DiagnosticsPage";
@@ -45,6 +46,7 @@ const PAGES: Record<RouteId, React.ComponentType> = {
   mpfm: MPFMPage,
   chokehealth: ChokeHealthPage,
   sand: SandPage,
+  records: RecordsPage,
   sandinputs: SandInputsPage,
   scenario: ScenarioPage,
   training: TrainingPage,

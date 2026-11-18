@@ -96,7 +96,7 @@ def parse_csv(text: str) -> list[SandMeasurement]:
                     rec[k] = v
                 else:
                     rec[k] = float(v)
-            out.append(SandMeasurement.model_validate(rec))
+            out.append(SandMeasurement.model_validate(rec | {"source": "csv_import"}))
         except ValidationError as exc:
             errors.append({"line": n, "error": "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())})
         except ValueError as exc:

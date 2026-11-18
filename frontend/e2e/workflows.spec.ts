@@ -252,3 +252,16 @@ test("measured sand history: CSV import, abnormal increase, bad files rejected l
   await expect(page.getByTestId("error-banner")).toContainText("line 2");
   await expect(page.getByTestId("measurement-table").locator("tbody tr")).toHaveCount(4);
 });
+
+test("simulation records: save the current assessment and inspect its provenance", async ({ page }) => {
+  await nav(page, "Simulation records");
+  const label = `e2e record ${Date.now()}`;
+  await page.getByLabel("Record label").fill(label);
+  await page.getByTestId("record-save").click();
+  await expect(page.getByTestId("record-detail")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("records-table")).toContainText(label);
+  await expect(page.getByTestId("record-provenance")).toContainText("simulated");
+  await expect(page.getByTestId("record-validation")).toContainText("not field-validated");
+  await page.getByRole("button", { name: `delete ${label}` }).click();
+  await expect(page.getByTestId("records-table").getByText(label)).toHaveCount(0);
+});

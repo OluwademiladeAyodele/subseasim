@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
 
 from app.api.schemas import (
     BlackOilUpdate,
@@ -16,6 +16,7 @@ from app.api.schemas import (
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    RecordRequest,
     SandCsvRequest,
     SelectorCommandRequest,
     SupplyRequest,
@@ -30,6 +31,7 @@ from app.scenarios.loader import ScenarioNotFound, get_scenario, list_scenarios
 from app.sessions import Session, SessionLimitReached, manager
 from app.simulation.components.elements import CommandRejected
 from app.simulation.engine import InvalidOperatingInput
+from app.storage import assessment, records
 from app.training.framework import TrainingError
 from app.training.registry import EXERCISES
 
@@ -292,6 +294,52 @@ async def sand_measurements_csv(sid: str, req: SandCsvRequest) -> dict:
     out = await _after_change(s)
     out["imported"] = n
     return out
+
+
+@router.post("/sessions/{sid}/records", status_code=201)
+async def save_record(sid: str, req: RecordRequest) -> dict:
+    """Save the current assessment of a session as an immutable record."""
+    s = _session(sid)
+    body = assessment.build_record(s.engine, sid)
+    row = records.save(body, req.label.strip(), req.notes)
+    s.engine.events.add(s.engine.time_s, "instrument", f"Simulation record saved: '{row['label']}'")
+    await s.broadcast()
+    return row
+
+
+@router.get("/records")
+def list_records(scenario_id: str | None = None, limit: int = 100) -> list[dict]:
+    return records.list_records(scenario_id, limit)
+
+
+@router.get("/records/{rid}")
+def get_record(rid: str) -> dict:
+    try:
+        return records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+
+
+@router.get("/records/{rid}/export")
+def export_record(rid: str) -> Response:
+    import json
+
+    try:
+        body = records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    name = "".join(c if c.isalnum() or c in "-_" else "_" for c in body["label"])[:60] or "record"
+    return Response(json.dumps(body, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="subseasim_{name}_{rid[:8]}.json"'})
+
+
+@router.delete("/records/{rid}", status_code=204)
+def delete_record(rid: str) -> Response:
+    try:
+        records.delete(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    return Response(status_code=204)
 
 
 @router.post("/sessions/{sid}/sand-choke/example")

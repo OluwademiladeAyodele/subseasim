@@ -88,6 +88,8 @@ class SandMeasurement(_S):
     d50_um: Pos | None = None
     d90_um: Pos | None = None
     note: str | None = None
+    #: How the record entered SubseaSim (provenance).
+    source: Literal["manual", "csv_import"] = "manual"
 
 
 class SandInputs(_S):

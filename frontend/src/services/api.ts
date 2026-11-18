@@ -1,4 +1,5 @@
 import type { ExerciseSummary, SandChokeInputs, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
+import type { RecordSummary, SimulationRecord } from "@/types/records";
 
 /** Scenario a brand-new session starts with (dynamic model, full system). */
 export const DEFAULT_SCENARIO = "xt_230xp22b_multiphase";
@@ -82,6 +83,11 @@ export const api = {
   mpfmFaults: (sid: string, body: Record<string, number | boolean>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/mpfm/faults`, body),
   mpfmCalibrate: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/mpfm/calibrate`),
   sandInputs: (sid: string, body: SandChokeInputs) => request<SessionPayload>("PUT", `/api/sessions/${sid}/sand-choke/inputs`, body),
+  saveRecord: (sid: string, label: string, notes: string | null) =>
+    request<RecordSummary>("POST", `/api/sessions/${sid}/records`, { label, notes }),
+  listRecords: (scenarioId?: string) => request<RecordSummary[]>("GET", `/api/records${scenarioId ? `?scenario_id=${encodeURIComponent(scenarioId)}` : ""}`),
+  getRecord: (id: string) => request<SimulationRecord>("GET", `/api/records/${id}`),
+  deleteRecord: (id: string) => request<null>("DELETE", `/api/records/${id}`),
   sandCsv: (sid: string, csv: string, replace: boolean) =>
     request<SessionPayload & { imported: number }>("POST", `/api/sessions/${sid}/sand-choke/measurements/csv`, { csv, replace }),
   sandExample: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/sand-choke/example`),

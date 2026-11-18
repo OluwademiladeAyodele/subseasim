@@ -119,6 +119,7 @@ class SimulationEngine:
         self._fluid_model_override: str | None = None
         #: Sand & choke inputs entered in this session (survive reset / model switches).
         self._sand_inputs: SandChokeInputs | None = None
+        self.sand_inputs_origin = self._preset_origin(scenario)
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
@@ -242,7 +243,16 @@ class SimulationEngine:
             return self._sand_inputs
         return self.scenario.sand_choke.model_copy(deep=True) if self.scenario.sand_choke is not None else None
 
-    def set_sand_inputs(self, inputs: SandChokeInputs, label: str = "updated") -> None:
+    @staticmethod
+    def _preset_origin(scenario) -> str:
+        sc, ex = scenario.sand_choke, scenario.sand_choke_example
+        return "illustrative example" if sc is not None and ex is not None and sc == ex else "scenario preset"
+
+    def set_sand_inputs(self, inputs: SandChokeInputs, label: str = "updated", origin: str | None = None) -> None:
+        """``origin`` (provenance of the input set): None = edited by the user."""
+        if origin is None:
+            origin = "edited illustrative example" if "illustrative" in self.sand_inputs_origin else "user-entered"
+        self.sand_inputs_origin = origin
         self._sand_inputs = inputs
         configure_choke(production_choke(self), inputs)
         if self.bo is not None:
@@ -276,13 +286,15 @@ class SimulationEngine:
             raise CommandRejected(f"too many records ({len(merged)} > 5000)")
         inputs = base.model_copy(deep=True)
         inputs.sand.measurements = merged
-        self.set_sand_inputs(inputs, f"measured sand history {'replaced' if replace else 'extended'} ({len(recs)} record(s) imported)")
+        self.set_sand_inputs(inputs, f"measured sand history {'replaced' if replace else 'extended'} ({len(recs)} record(s) imported)",
+                             origin=self.sand_inputs_origin)
         return len(recs)
 
     def load_sand_example(self) -> None:
         if self.scenario.sand_choke_example is None:
             raise CommandRejected("this scenario has no illustrative sand / choke example")
-        self.set_sand_inputs(self.scenario.sand_choke_example.model_copy(deep=True), "replaced by the ILLUSTRATIVE example set")
+        self.set_sand_inputs(self.scenario.sand_choke_example.model_copy(deep=True), "replaced by the ILLUSTRATIVE example set",
+                             origin="illustrative example")
 
     def sand_fast_forward(self, days: float) -> None:
         if self.sand is None:
@@ -653,6 +665,7 @@ class SimulationEngine:
         self._mode_override = None
         if scenario.id != self.scenario.id:
             self._sand_inputs = None
+            self.sand_inputs_origin = self._preset_origin(scenario)
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
