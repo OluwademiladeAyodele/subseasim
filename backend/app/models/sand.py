@@ -227,6 +227,14 @@ class CavitationInputs(_S):
         return self
 
 
+class ErosionalVelocityInputs(_S):
+    """API RP 14E erosional-velocity screening (supplementary indicator)."""
+
+    #: Empirical constant C (API RP 14E: 100 continuous, 125 intermittent service, US units; solids-free).
+    c_factor: Annotated[float, Field(gt=0, le=400)] = 100.0
+    c_source: str | None = "API RP 14E, continuous service (solids-free)"
+
+
 class SandChokeInputs(_S):
     geomechanics: GeomechanicsInputs = Field(default_factory=GeomechanicsInputs)
     completion: CompletionInputs = Field(default_factory=CompletionInputs)
@@ -234,6 +242,7 @@ class SandChokeInputs(_S):
     detector: DetectorInputs = Field(default_factory=DetectorInputs)
     choke: ChokeTrimInputs = Field(default_factory=ChokeTrimInputs)
     cavitation: CavitationInputs = Field(default_factory=CavitationInputs)
+    erosional_velocity: ErosionalVelocityInputs = Field(default_factory=ErosionalVelocityInputs)
     custom_materials: list[CustomMaterial] = Field(default_factory=list)
     acceptance: AcceptanceCriteria = Field(default_factory=AcceptanceCriteria)
     thresholds: HealthThresholds = Field(default_factory=HealthThresholds)

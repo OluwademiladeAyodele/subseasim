@@ -270,6 +270,15 @@ export function SandInputsPage() {
           <NumField label="Range" unit="g/s" value={d.detector.range_max_g_s} onChange={(v) => v != null && set("detector", { range_max_g_s: v })} />
         </Panel>
 
+        <Panel title="Erosional velocity (API RP 14E screening)" subtitle="Supplementary indicator for clean service; the DNV sand-erosion model governs.">
+          <NumField label="Empirical constant C" unit="-" value={d.erosional_velocity.c_factor} onChange={(v) => v != null && set("erosional_velocity", { c_factor: v })} testId="in-c-factor"
+            hint="API RP 14E: 100 continuous, 125 intermittent service (US units, solids-free). Reduce it for sand-laden flow per company practice." />
+          <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+            <span className="text-[13px] text-muted">Source of C</span>
+            <Input aria-label="Source of C" value={d.erosional_velocity.c_source ?? ""} onChange={(e) => set("erosional_velocity", { c_source: e.target.value || null })} />
+          </label>
+        </Panel>
+
         <Panel title="Choke cavitation data (manufacturer / PVT)" subtitle="Screening only. Without FL and sigma limits only the outlet-pressure checks are made.">
           <NumField label="FL, all openings" unit="-" value={d.cavitation.fl} onChange={(v) => set("cavitation", { fl: v })} testId="in-fl"
             hint="Liquid pressure-recovery factor of the trim (IEC 60534-2-1). A table below overrides it." />

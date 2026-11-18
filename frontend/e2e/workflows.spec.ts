@@ -224,6 +224,9 @@ test("choke cavitation screening: missing valve data, then the vendor FL and sig
   await expect(page.getByTestId("cavitation")).toBeVisible();
   await expect(page.getByText(/not a CFD result/)).toBeVisible();
   await expect(page.getByTestId("cavitation-risk")).not.toHaveText("Unavailable");
+  // supplementary API RP 14E screening with all three locations from the simulated flow
+  await expect(page.getByTestId("api14e-outlet")).toContainText("m/s");
+  await expect(page.getByTestId("api14e-status")).toBeVisible();
 });
 
 test("exercise 7: integrated three-phase production, sand and choke health starts guided", async ({ page }) => {

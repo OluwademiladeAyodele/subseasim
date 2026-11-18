@@ -65,6 +65,7 @@ export interface SandChokeInputs {
     bubble_point_bara: number | null;
     bubble_point_uncertainty_pct: number;
   };
+  erosional_velocity: { c_factor: number; c_source: string | null };
   choke: {
     design: "plug_and_cage" | "external_sleeve" | "needle_and_seat" | "other";
     model_label: string | null;
@@ -186,11 +187,25 @@ export interface CavitationResult {
   limitations?: string[];
 }
 
+export interface ErosionalVelocityResult {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  c_factor?: number;
+  c_source?: string | null;
+  method?: string;
+  sand_present?: boolean;
+  any_exceeded?: boolean;
+  notes?: string[];
+  locations?: { key: string; label: string; available: boolean; missing?: string; u_mix_m_s?: number; rho_mix_kg_m3?: number; ve_m_s?: number; ratio?: number; exceeded?: boolean }[];
+}
+
 export interface SandChokeResults {
   available: boolean;
   reason?: string;
   service_days?: number;
   cavitation?: CavitationResult;
+  erosional_velocity?: ErosionalVelocityResult;
   inputs_status?: Record<string, { complete: boolean; missing: string[] }>;
   sand?: {
     mode: string;

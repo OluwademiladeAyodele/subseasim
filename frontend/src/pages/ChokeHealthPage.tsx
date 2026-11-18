@@ -15,6 +15,7 @@ import { fmt } from "@/lib/units";
 import type { SandChokeResults, WearCriterion } from "@/types/sand";
 
 import { CavitationPanel } from "./CavitationPanel";
+import { ErosionalVelocityPanel } from "./ErosionalVelocityPanel";
 import { SandSourcePanel, Unavailable } from "./SandSource";
 
 export const HEALTH_TONE: Record<string, "ok" | "info" | "warn" | "bad" | "fault" | "neutral"> = {
@@ -110,6 +111,8 @@ export function ChokeHealthPage() {
         </Panel>
 
         <CavitationPanel c={r.cavitation} onInputs={() => go("sandinputs")} />
+
+        <ErosionalVelocityPanel ev={r.erosional_velocity} />
 
         <SandSourcePanel r={r} samples={sim.samples as unknown as Record<string, number | null>[]} onInputs={() => go("sandinputs")} />
 

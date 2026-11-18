@@ -51,6 +51,20 @@ describe("Choke health page", () => {
   });
 });
 
+describe("API RP 14E screening on the choke health page", () => {
+  it("lists Ve against the simulated mixture velocity per location and warns when sand is present", async () => {
+    current = base();
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
+    const ev = current.sand_choke!.erosional_velocity!;
+    const outlet = ev.locations!.find((r) => r.key === "outlet")!;
+    expect(screen.getByTestId("api14e-outlet")).toHaveTextContent(fmt(outlet.ve_m_s, 2));
+    expect(screen.getByTestId("api14e-status")).toHaveTextContent(ev.any_exceeded ? "Above Ve" : "Below Ve");
+    expect(ev.sand_present).toBe(true);
+    expect(screen.getByText(/C must be reduced/)).toBeInTheDocument();
+  });
+});
+
 describe("Cavitation screening on the choke health page", () => {
   it("shows the screening result from the backend, labelled as not CFD", async () => {
     current = base();

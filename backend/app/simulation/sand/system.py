@@ -388,7 +388,7 @@ class SandChokeSystem:
         a_fl = math.pi * op.flowline_d**2 / 4
         return {"u_jet": u_jet, "critical": op.p2 / max(op.p1, 1.0) < yc, "y_crit": yc, "u_outlet": q_dn / a_out if a_out else None,
                 "u_gallery": q_up / a_gal if a_gal else None, "u_flowline": q_dn / a_fl, "rho_l": rho_l, "rho_g": rho_g, "x": x,
-                "rho_mix_dn": float(s2.rho_ns[0]), "v_sl_flowline": max(op.w_choke, 0.0) * (1 - x) / rho_l / a_fl}
+                "rho_mix_dn": float(s2.rho_ns[0]), "rho_mix_up": float(s1.rho_ns[0]), "v_sl_flowline": max(op.w_choke, 0.0) * (1 - x) / rho_l / a_fl}
 
     def _erode(self, op: OperatingPoint, m_sand: float, dt: float) -> dict:
         """Integrate wear over dt at a constant operating point; returns rates."""
@@ -620,6 +620,39 @@ class SandChokeSystem:
         tot = math.sqrt(s_k**2 + s_sand**2 + s_u**2)
         return tot, {"erosion model (K, geometry)": s_k, "sand rate": s_sand, "particle velocity": s_u}
 
+    def erosional_velocity(self) -> dict:
+        """API RP 14E erosional-velocity screening at the gallery, the choke
+        outlet bore and the flowline (no-slip mixture velocity and density)."""
+        inp = self.inputs.erosional_velocity
+        v = (self.rates or {}).get("velocities")
+        op = self.last_op
+        if not v and op is not None and self.engine.bo is not None and self.choke is not None:
+            v = self._velocities(op)  # needs only the flow, not the erosion inputs
+        if not v:
+            return {"available": False, "reason": "needs a flowing three-phase operating point at the choke"}
+        rows = []
+        for key, label, u, rho, need in (
+            ("gallery", "Body gallery (upstream of the cage)", v.get("u_gallery"), v["rho_mix_up"], "gallery diameter"),
+            ("outlet", "Choke outlet bore", v.get("u_outlet"), v["rho_mix_dn"], "choke outlet bore"),
+            ("flowline", "Flowline", v.get("u_flowline"), v["rho_mix_dn"], None),
+        ):
+            if u is None:
+                rows.append({"key": key, "label": label, "available": False, "missing": need})
+                continue
+            ve = er.api14e_erosional_velocity(rho, inp.c_factor)
+            rows.append({"key": key, "label": label, "available": True, "u_mix_m_s": u, "rho_mix_kg_m3": rho,
+                         "ve_m_s": ve, "ratio": u / ve, "exceeded": u > ve})
+        sand = (self.rates or {}).get("m_sand_choke", 0.0) > 0
+        notes = ["Supplementary screening only: API RP 14E is an empirical velocity limit for clean service. It is NOT a "
+                 "sand-erosion model and NOT a choke-geometry model - the DNV-RP-O501 results above govern."]
+        if sand:
+            notes.append("Sand is present: API RP 14E itself says C must be reduced for solids-laden flow, so 'below Ve' does "
+                         "not mean erosion-free here.")
+        return {"available": True, "status": "Correlation-based screening (supplementary)", "c_factor": inp.c_factor,
+                "c_source": inp.c_source, "method": "Ve = C / sqrt(rho_m) (API RP 14E; ft/s, lb/ft3), no-slip mixture density "
+                "and velocity at each location", "locations": rows, "sand_present": sand,
+                "any_exceeded": any(r.get("exceeded") for r in rows), "notes": notes}
+
     def cavitation(self, op: OperatingPoint | None = None) -> dict:
         """Cavitation / flashing screening at the current choke operating point."""
         op = op or self.last_op or self.operating_point()
@@ -673,6 +706,7 @@ class SandChokeSystem:
             "service_days": days,
             "inputs_status": self.input_status(),
             "cavitation": self.cavitation(op),
+            "erosional_velocity": self.erosional_velocity(),
             "sand": None if not src else {
                 "mode": src["mode"],
                 "formation_kg_d": None if src["formation_kg_s"] is None else src["formation_kg_s"] * S_PER_DAY,

@@ -123,6 +123,7 @@ Documents: `CHOKE_EROSION_MODEL.md` and `CHOKE_MAINTENANCE_MODEL.md`. Tests:
 | Calibration posterior | Closed-form Bayesian update |
 | Health categories in order to Critical, with alarms | Configured thresholds |
 | Erosion feedback raises Cv, and measured Cv tracking detects it | Integrated simulation |
+| API RP 14E erosional velocity (supplementary) | Hand evaluation in US units; exact unit conversions (`test_api14e.py`) |
 
 **Not validated:** generic geometry and impact angle. The DNV material
 constants must be verified against the licensed document or vendor data.

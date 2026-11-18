@@ -151,6 +151,18 @@ class CageGeometry:
         return 2 * v_hole / (math.pi * d * t)
 
 
+#: 1 lb/ft3 in kg/m3 and 1 ft in m (exact definitions).
+LB_FT3 = 0.45359237 / 0.3048**3
+FT = 0.3048
+
+
+def api14e_erosional_velocity(rho_mix_kg_m3: float, c_factor: float) -> float:
+    """API RP 14E erosional velocity  Ve = C / sqrt(rho_m)  (Ve ft/s, rho_m lb/ft3),
+    returned in m/s for a mixture density in kg/m3. A SCREENING indicator for
+    clean (solids-free) service only - not a sand-erosion or choke model."""
+    return c_factor / math.sqrt(rho_mix_kg_m3 / LB_FT3) * FT
+
+
 def jet_velocity(p1: float, p2: float, w: float, cda: float, rho_l: float, rho_g: float, x: float, k: float,
                  y_crit: float) -> float:
     """Mixture velocity at the vena contracta of the choke [m/s] (Sachdeva)."""
