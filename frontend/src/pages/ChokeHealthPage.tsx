@@ -1,7 +1,7 @@
 /**
  * Choke health & erosion: wear per criterion against the site allowances,
  * remaining life (P10 / P50 / P90) in days, the sand source (onset and
- * rates to the choke), sand and liquid produced,
+ * rates to the choke), cavitation and flashing screening, sand and liquid produced,
  * measured Cv tracking, calibration from inspections, confidence and a
  * reasoned recommendation. All values from the backend erosion model.
  */
@@ -14,6 +14,7 @@ import { Badge, Button, Input, Panel, Stat } from "@/components/ui/primitives";
 import { fmt } from "@/lib/units";
 import type { SandChokeResults, WearCriterion } from "@/types/sand";
 
+import { CavitationPanel } from "./CavitationPanel";
 import { SandSourcePanel, Unavailable } from "./SandSource";
 
 export const HEALTH_TONE: Record<string, "ok" | "info" | "warn" | "bad" | "fault" | "neutral"> = {
@@ -107,6 +108,8 @@ export function ChokeHealthPage() {
           </ul>
           <p className="mt-2 text-[12px] text-dim">P10–P90 life range = central estimate ÷/× exp(1.28 σ). Inspections narrow the erosion-model term; a measured sand rate narrows the sand term.</p>
         </Panel>
+
+        <CavitationPanel c={r.cavitation} onInputs={() => go("sandinputs")} />
 
         <SandSourcePanel r={r} samples={sim.samples as unknown as Record<string, number | null>[]} onInputs={() => go("sandinputs")} />
 

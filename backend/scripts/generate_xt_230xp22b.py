@@ -184,6 +184,7 @@ sc["sand_choke"] = {
     "completion": {"completion_type": "cased_perforated_standalone_screens"},
     "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500)", "max_cv": 161.0,
               "min_controllable_cv": 1.61, "actuator_steps": 165, "erosion_feedback": True},
+    "detector": {"tag": "SDT-101"},
 }
 # Complete ILLUSTRATIVE set (NOT field data) so training can run before site data exist.
 sc["sand_choke_example"] = {
@@ -195,6 +196,11 @@ sc["sand_choke_example"] = {
                    "perforated_interval_m": 30, "screen_type": "premium_mesh", "screen_aperture_um": 250, "bridging_factor": 2.0},
     "sand": {"grain_density_kg_m3": 2650, "d10_um": 60, "d50_um": 150, "d90_um": 300, "mode": "predictive",
              "rate_coefficient_kg_m3": 0.05, "rate_exponent": 1.5, "measured_unit": "kg_d"},
+    "detector": {"tag": "SDT-101"},
+    "cavitation": {"fl_table": [{"opening_pct": 10, "fl": 0.95}, {"opening_pct": 50, "fl": 0.9}, {"opening_pct": 100, "fl": 0.85}],
+                   "fl_source": "ILLUSTRATIVE - replace with the manufacturer's FL for this trim",
+                   "sigma_incipient": 2.0, "sigma_constant": 1.7, "sigma_damage": 1.4,
+                   "threshold_source": "ILLUSTRATIVE - replace with the manufacturer's sigma limits for this trim"},
     "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500) - ILLUSTRATIVE geometry",
               "max_cv": 161.0, "min_controllable_cv": 1.61, "actuator_steps": 165, "stroke_mm": 60, "cage_inner_diameter_mm": 90,
               "cage_wall_thickness_mm": 12, "plug_diameter_mm": 90, "choke_outlet_bore_mm": 127, "gallery_diameter_mm": 127,
@@ -369,6 +375,11 @@ components = [
     panel("PTT-002", ["instrument:PT-002", "instrument:TT-002"], (290, 340, 327, 368), group="downhole"),
     panel("PTT-103", ["instrument:PT-103", "instrument:TT-103"], (488, 214, 526, 243), tap=(CHKX, 227), flow_path="choke-outlet", group="downstream"),
     panel("PTT-106", ["instrument:PT-106", "instrument:TT-106"], (488, 250, 526, 279), tap=(CHKX, 260), flow_path="choke-outlet", group="downstream"),
+    {"id": "SDT-101", "type": "sand_detector", "model": None, **box(490, 175, 537, 195), "rotation": 0, "tap": p(CHKX, 184),
+     "flow_path": "choke-outlet", "group": "downstream",
+     "note": "SDT-101 acoustic sand detector on the choke outlet; reading from the sand-detector model."},
+    comp("SDT-101-body", "inline_device", None, (CHKX, 200), 90, flow_path="choke-outlet",
+         note="Sand detector SDT-101 clamp-on sensor on the choke outlet."),
     {"id": "CHK-101-panel", "type": "choke_panel", "model": "element:CHOKE", **box(496, 124, 537, 167), "rotation": 0, "group": "downstream"},
     # --- selector valves (lower right)
     comp("HSV-101", "selector_valve", "selector:HSV-101", (468, 326), 0, flow_path="hyd-lp-a"),

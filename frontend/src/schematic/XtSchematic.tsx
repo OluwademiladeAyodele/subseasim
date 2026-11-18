@@ -275,6 +275,25 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
           </Clickable>
         );
       }
+      case "sand_detector": {
+        const det = state.sand_choke?.available ? state.sand_choke.detector : undefined;
+        const alarm = !!det?.alarm;
+        const txt = !det ? "three-phase model off" : det.reading_g_s == null ? det.status.toLowerCase().replace(/_/g, " ") : `${fmt(det.reading_g_s, 3)} g/s`;
+        return (
+          <g key={c.id} data-testid={`panel-${c.id}`}>
+            {c.tap && <TapLeader c={c} />}
+            <Clickable id={c.id} label={`${c.id} sand detector - open sand monitoring`} selected={false} testid="sand-detector" onClick={() => onNavigate("sand")}>
+              <title>{det ? `${det.tag}: ${det.type.replace(/_/g, " ")} - click for sand monitoring` : c.note}</title>
+              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={alarm ? "#fee2e2" : XT.panel} stroke={alarm ? XT.closed : "#94a3b8"} strokeWidth={alarm ? 1.6 : 0.9}
+                strokeDasharray={det ? undefined : "1.5 1.5"} />
+              <text x={c.x + 5} y={c.y + c.h / 2 + 3.5} fontSize={10} fontWeight={700} fill={XT.ink}>{c.id}</text>
+              <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 3.5} textAnchor="end" fontSize={9.5} className="num" fill={alarm ? XT.closed : det ? XT.ink : COLORS.static}>
+                {txt}
+              </text>
+            </Clickable>
+          </g>
+        );
+      }
       case "header_panel": {
         const hp = hydPressure(c.model);
         const sel = selHyd === id;

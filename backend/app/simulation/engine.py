@@ -175,6 +175,7 @@ class SimulationEngine:
         self.ctrl = ControlHydraulics(scenario.control_hydraulics) if scenario.control_hydraulics else None
         self.sand: SandChokeSystem | None = None
         self._sand_health = None
+        self._sand_alarm = False
         self._sand_check_t = 0.0
         sand_inputs = self.sand_inputs
         if sand_inputs is not None:
@@ -284,6 +285,13 @@ class SimulationEngine:
                             f"Choke health {self._sand_health} -> {cat}: {snap['recommendation']['text']}", component=s.choke.tag if s.choke else None,
                             severity=sev)
         self._sand_health = cat
+        alarm = bool(snap["detector"]["alarm"])
+        if alarm != self._sand_alarm:
+            d = snap["detector"]
+            self.events.add(self.time_s, "alarm" if alarm else "instrument",
+                            f"{d['tag']} sand {'ALARM' if alarm else 'alarm cleared'}: {d['reading_g_s'] or 0:.3f} g/s "
+                            f"(threshold {d['alarm_threshold_g_s']:g} g/s)", component=d["tag"], severity="warning" if alarm else "info")
+            self._sand_alarm = alarm
 
     def set_mpfm_faults(self, **kw) -> None:
         if self.mpfm is None:
@@ -578,6 +586,8 @@ class SimulationEngine:
         sd = getattr(self, "sand", None)
         if sd is not None and sd.rates:
             s["sand:choke_g_s"] = sd.rates.get("m_sand_choke", 0.0) * 1000.0
+            r = sd.det.get("reading_kg_s")
+            s["sand:detector_g_s"] = None if r is None else r * 1000.0
             dd = sd.dd_cal()
             s["sand:max_hole_mm"] = float(dd.max()) * 1000.0 if dd.size else None
         m = getattr(self, "mpfm", None)

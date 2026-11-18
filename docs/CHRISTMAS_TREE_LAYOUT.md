@@ -104,6 +104,8 @@ made in the generator.
 
 | Item | Position |
 |---|---|
+| SDT-101 tap (sand detector) | y 184 |
+| SDT-101 sensor | y 200 |
 | PTT-103 tap | y 227 |
 | PTT-106 tap | y 260 |
 
@@ -156,6 +158,7 @@ aliases (`tag_aliases` is empty for this scenario).
 | PDT | Differential pressure | PDT-101 (choke), PDT-401 (SLV) |
 | FT | Flow | FT-101 |
 | HSV | Hydraulic selector valves | HSV-101 to HSV-104 |
+| SDT | Sand detector | SDT-101 (choke outlet; old saves tagged XT3001 are renamed on load) |
 | PT-6xx | Hydraulic supply and header pressures | PT-601 (LP), PT-602 (HP), PT-611/612/621/622 (headers) |
 
 **Number ranges.** 0xx downhole, 1xx production bore and wing, 2xx flowline
@@ -242,6 +245,7 @@ communications. The SCM Reconnect button is therefore not reproduced.
 | Chemical line or its connector | That injection circuit's controls (pump, valves, routes) |
 | Selector valve or hydraulic panel | The control-hydraulics inspector: selector commands, header pressures, HPU trip / restore |
 | SCM Diagnostic | The Diagnostics page |
+| Sand detector SDT-101 | The Sand monitoring page |
 
 **State shown on the drawing**
 

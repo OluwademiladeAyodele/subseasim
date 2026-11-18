@@ -68,6 +68,8 @@ export function SandInputsPage() {
   useEffect(() => setD(saved ? structuredClone(saved) : null), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   const fileRef = useRef<HTMLInputElement>(null);
   const [cvText, setCvText] = useState("");
+  const [flText, setFlText] = useState("");
+  useEffect(() => setFlText((saved?.cavitation.fl_table ?? []).map((r) => `${r.opening_pct}, ${r.fl}`).join("\n")), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setCvText((saved?.choke.cv_table ?? []).map(([s, c]) => `${s}, ${c}`).join("\n")), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d) return <PageBody><p className="text-dim">This scenario has no sand / choke model.</p></PageBody>;
   const status = state.sand_choke?.inputs_status;
@@ -79,7 +81,12 @@ export function SandInputsPage() {
 
   const save = () => {
     const rows = cvText.split(/\n/).map((l) => l.split(/[,;\t ]+/).filter(Boolean).map(Number)).filter((r) => r.length >= 2 && r.every(Number.isFinite));
-    actions.sandInputs({ ...d, choke: { ...d.choke, cv_table: rows.map((r) => [r[0], r[1]] as [number, number]) } });
+    const fl = flText.split(/\n/).map((l) => l.split(/[,;\t ]+/).filter(Boolean).map(Number)).filter((r) => r.length >= 2 && r.every(Number.isFinite));
+    actions.sandInputs({
+      ...d,
+      choke: { ...d.choke, cv_table: rows.map((r) => [r[0], r[1]] as [number, number]) },
+      cavitation: { ...d.cavitation, fl_table: fl.map((r) => ({ opening_pct: r[0], fl: r[1] })) },
+    });
   };
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
@@ -166,7 +173,7 @@ export function SandInputsPage() {
             ) : (
               <>
                 <NumField label="Rate coefficient k (calibrated)" unit="kg/m³" value={s.rate_coefficient_kg_m3} onChange={(v) => set("sand", { rate_coefficient_kg_m3: v })}
-                  hint="Formation sand per m³ of reservoir liquid at twice the critical drawdown - from sand-trap or well-test sand history" />
+                  hint="Formation sand per m³ of reservoir liquid at twice the critical drawdown - from sand-trap / detector history" />
                 <NumField label="Rate exponent n" unit="-" value={s.rate_exponent} onChange={(v) => v != null && set("sand", { rate_exponent: v })} />
               </>
             )}
@@ -248,6 +255,38 @@ export function SandInputsPage() {
           <NumField label="Changeout assessment from" unit="fraction" value={d.thresholds.changeout_assessment} onChange={(v) => v != null && set("thresholds", { changeout_assessment: v })} />
           <NumField label="Critical from" unit="fraction" value={d.thresholds.critical} onChange={(v) => v != null && set("thresholds", { critical: v })} />
           <NumField label="Elevated erosion rate" unit="mm/yr" value={d.thresholds.elevated_rate_mm_y} onChange={(v) => v != null && set("thresholds", { elevated_rate_mm_y: v })} />
+        </Panel>
+
+        <Panel title="Sand detector">
+          <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+            <span className="text-[13px] text-muted">Tag</span>
+            <Input aria-label="Detector tag" value={d.detector.tag} onChange={(e) => set("detector", { tag: e.target.value })} />
+          </label>
+          <SelField label="Type" value={d.detector.detector_type} onChange={(v) => v && set("detector", { detector_type: v })} options={[["acoustic_non_intrusive", "Acoustic, non-intrusive"], ["intrusive_erosion_probe", "Intrusive erosion probe"]]} />
+          <NumField label="Calibration uncertainty (1σ)" unit="%" value={d.detector.calibration_uncertainty_pct} onChange={(v) => v != null && set("detector", { calibration_uncertainty_pct: v })} />
+          <NumField label="Minimum velocity for detection" unit="m/s" value={d.detector.min_velocity_m_s} onChange={(v) => v != null && set("detector", { min_velocity_m_s: v })} />
+          <NumField label="Noise floor" unit="g/s" value={d.detector.noise_floor_g_s} onChange={(v) => v != null && set("detector", { noise_floor_g_s: v })} />
+          <NumField label="Alarm threshold" unit="g/s" value={d.detector.alarm_threshold_g_s} onChange={(v) => v != null && set("detector", { alarm_threshold_g_s: v })} />
+          <NumField label="Range" unit="g/s" value={d.detector.range_max_g_s} onChange={(v) => v != null && set("detector", { range_max_g_s: v })} />
+        </Panel>
+
+        <Panel title="Choke cavitation data (manufacturer / PVT)" subtitle="Screening only. Without FL and sigma limits only the outlet-pressure checks are made.">
+          <NumField label="FL, all openings" unit="-" value={d.cavitation.fl} onChange={(v) => set("cavitation", { fl: v })} testId="in-fl"
+            hint="Liquid pressure-recovery factor of the trim (IEC 60534-2-1). A table below overrides it." />
+          <h3 className="mb-1 mt-2 t-eyebrow">FL vs opening</h3>
+          <textarea aria-label="FL table" className="h-20 w-full rounded-md border border-line bg-panel p-2 font-mono text-[12px]" placeholder={"opening %, FL\n10, 0.95\n100, 0.85"}
+            value={flText} onChange={(e) => setFlText(e.target.value)} />
+          <NumField label="σ incipient cavitation" unit="-" value={d.cavitation.sigma_incipient} onChange={(v) => set("cavitation", { sigma_incipient: v })} testId="in-sigma-i" />
+          <NumField label="σ constant cavitation" unit="-" value={d.cavitation.sigma_constant} onChange={(v) => set("cavitation", { sigma_constant: v })} />
+          <NumField label="σ manufacturer damage limit" unit="-" value={d.cavitation.sigma_damage} onChange={(v) => set("cavitation", { sigma_damage: v })}
+            hint="σ = (P1 − Pv)/(P1 − P2). Limits must decrease: incipient > constant > damage." />
+          <NumField label="Bubble point (PVT report)" unit="bara" value={d.cavitation.bubble_point_bara} onChange={(v) => set("cavitation", { bubble_point_bara: v })}
+            hint="Empty: Standing correlation from the fluid inputs." />
+          <NumField label="Bubble-point sensitivity band" unit="%" value={d.cavitation.bubble_point_uncertainty_pct} onChange={(v) => v != null && set("cavitation", { bubble_point_uncertainty_pct: v })} />
+          <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+            <span className="text-[13px] text-muted">Data source</span>
+            <Input aria-label="Cavitation data source" value={d.cavitation.threshold_source ?? ""} onChange={(e) => set("cavitation", { threshold_source: e.target.value || null })} />
+          </label>
         </Panel>
 
         <Panel title="Operating history (pre-loads wear)" className="xl:col-span-2" subtitle="Past periods since the trim was installed, e.g. monthly averages. Applied on save.">

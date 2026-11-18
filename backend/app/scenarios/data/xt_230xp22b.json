@@ -1901,6 +1901,9 @@
       "min_controllable_cv": 1.61,
       "actuator_steps": 165,
       "erosion_feedback": true
+    },
+    "detector": {
+      "tag": "SDT-101"
     }
   },
   "sand_choke_example": {
@@ -1936,6 +1939,30 @@
       "rate_coefficient_kg_m3": 0.05,
       "rate_exponent": 1.5,
       "measured_unit": "kg_d"
+    },
+    "detector": {
+      "tag": "SDT-101"
+    },
+    "cavitation": {
+      "fl_table": [
+        {
+          "opening_pct": 10,
+          "fl": 0.95
+        },
+        {
+          "opening_pct": 50,
+          "fl": 0.9
+        },
+        {
+          "opening_pct": 100,
+          "fl": 0.85
+        }
+      ],
+      "fl_source": "ILLUSTRATIVE - replace with the manufacturer's FL for this trim",
+      "sigma_incipient": 2.0,
+      "sigma_constant": 1.7,
+      "sigma_damage": 1.4,
+      "threshold_source": "ILLUSTRATIVE - replace with the manufacturer's sigma limits for this trim"
     },
     "choke": {
       "design": "plug_and_cage",

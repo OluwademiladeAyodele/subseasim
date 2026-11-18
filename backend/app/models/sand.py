@@ -1,4 +1,4 @@
-"""Sand production, sand transport, sand detection and choke-erosion INPUTS.
+"""Sand production, sand transport, sand detection, choke-erosion and choke-cavitation INPUTS.
 
 Every site-specific value is optional: a calculation that needs a missing
 input reports "unavailable - missing inputs: ..." instead of using a
@@ -84,6 +84,19 @@ class SandInputs(_S):
     #: twice the critical drawdown [kg/m3]. MUST be calibrated (sand-trap / detector data).
     rate_coefficient_kg_m3: NonNeg | None = None
     rate_exponent: Pos = 1.5
+
+
+class DetectorInputs(_S):
+    tag: str = "SDT-101"
+    detector_type: Literal["acoustic_non_intrusive", "intrusive_erosion_probe"] = "acoustic_non_intrusive"
+    #: Calibration factor uncertainty (1 sigma) [%].
+    calibration_uncertainty_pct: NonNeg = 25.0
+    #: Mixture velocity below which an acoustic detector cannot detect sand [m/s].
+    min_velocity_m_s: NonNeg = 1.0
+    #: Background (flow-noise) equivalent sand rate [g/s].
+    noise_floor_g_s: NonNeg = 0.005
+    alarm_threshold_g_s: Pos = 0.1
+    range_max_g_s: Pos = 50.0
 
 
 class HoleRow(_S):
@@ -181,11 +194,46 @@ class InspectionRecord(_S):
     trim_replaced: bool = False
 
 
+class FlPoint(_S):
+    opening_pct: Annotated[float, Field(ge=0, le=100)]
+    fl: Annotated[float, Field(gt=0, le=1)]
+
+
+class CavitationInputs(_S):
+    """Valve-specific cavitation data of the production choke trim. Every
+    value comes from the manufacturer or a PVT report; nothing is assumed."""
+
+    #: Liquid pressure-recovery factor FL (IEC 60534-2-1) of the trim, one value for all openings.
+    fl: Annotated[float, Field(gt=0, le=1)] | None = None
+    #: FL against opening (preferred when the vendor gives it); overrides ``fl``.
+    fl_table: list[FlPoint] = Field(default_factory=list)
+    fl_source: str | None = None
+    #: Cavitation index limits sigma = (P1 - Pv)/(P1 - P2) for this trim (ISA-RP75.23 form).
+    sigma_incipient: Pos | None = None
+    sigma_constant: Pos | None = None
+    #: Manufacturer's recommended minimum sigma (damage limit).
+    sigma_damage: Pos | None = None
+    threshold_source: str | None = None
+    #: Bubble point of the produced oil from a PVT report [bara]; overrides the correlation.
+    bubble_point_bara: Pos | None = None
+    #: Sensitivity band applied to the bubble point [%].
+    bubble_point_uncertainty_pct: Annotated[float, Field(ge=0, le=50)] = 10.0
+
+    @model_validator(mode="after")
+    def _ordered(self):
+        vals = [v for v in (self.sigma_incipient, self.sigma_constant, self.sigma_damage) if v is not None]
+        if any(a <= b for a, b in zip(vals, vals[1:])):
+            raise ValueError("sigma limits must decrease: incipient > constant > damage")
+        return self
+
+
 class SandChokeInputs(_S):
     geomechanics: GeomechanicsInputs = Field(default_factory=GeomechanicsInputs)
     completion: CompletionInputs = Field(default_factory=CompletionInputs)
     sand: SandInputs = Field(default_factory=SandInputs)
+    detector: DetectorInputs = Field(default_factory=DetectorInputs)
     choke: ChokeTrimInputs = Field(default_factory=ChokeTrimInputs)
+    cavitation: CavitationInputs = Field(default_factory=CavitationInputs)
     custom_materials: list[CustomMaterial] = Field(default_factory=list)
     acceptance: AcceptanceCriteria = Field(default_factory=AcceptanceCriteria)
     thresholds: HealthThresholds = Field(default_factory=HealthThresholds)
@@ -196,8 +244,9 @@ class SandChokeInputs(_S):
 
     @model_validator(mode="before")
     @classmethod
-    def _drop_retired_keys(cls, data):
-        # saves made before the sand detector was retired still carry its block
-        if isinstance(data, dict) and "detector" in data:
-            data = {k: v for k, v in data.items() if k != "detector"}
+    def _rename_retired_detector_tag(cls, data):
+        # saves made before the plain-tag nomenclature call the detector XT3001
+        det = data.get("detector") if isinstance(data, dict) else None
+        if isinstance(det, dict) and det.get("tag") == "XT3001":
+            data = {**data, "detector": {**det, "tag": "SDT-101"}}
         return data

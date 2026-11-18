@@ -1310,6 +1310,33 @@
       "group": "downstream"
     },
     {
+      "id": "SDT-101",
+      "type": "sand_detector",
+      "model": null,
+      "x": 1222.0,
+      "y": 351.0,
+      "w": 122.2,
+      "h": 52.0,
+      "rotation": 0,
+      "tap": [
+        1198.6,
+        374.4
+      ],
+      "flow_path": "choke-outlet",
+      "group": "downstream",
+      "note": "SDT-101 acoustic sand detector on the choke outlet; reading from the sand-detector model."
+    },
+    {
+      "id": "SDT-101-body",
+      "type": "inline_device",
+      "model": null,
+      "x": 1198.6,
+      "y": 416.0,
+      "rotation": 90,
+      "flow_path": "choke-outlet",
+      "note": "Sand detector SDT-101 clamp-on sensor on the choke outlet."
+    },
+    {
       "id": "CHK-101-panel",
       "type": "choke_panel",
       "model": "element:CHOKE",

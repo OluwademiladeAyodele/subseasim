@@ -209,7 +209,21 @@ test("sand & choke: inputs drive the prediction, choke health and fast-forward",
   // the sand source (onset and rates to the choke) is on the same page
   await expect(page.getByTestId("sand-source")).toBeVisible();
   await expect(page.getByTestId("risk-index")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Workspaces" }).getByRole("link", { name: "Sand monitoring" })).toHaveCount(0);
+  await nav(page, "Sand monitoring");
+  await expect(page.getByTestId("detector-status")).toBeVisible();
+});
+
+test("choke cavitation screening: missing valve data, then the vendor FL and sigma limits", async ({ page }) => {
+  await nav(page, "Choke health");
+  // operator preset: no FL / sigma limits entered - the screening says what is missing
+  await expect(page.getByTestId("cavitation-missing")).toContainText("FL");
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-sigma-i")).toHaveValue("2", { timeout: 15_000 });
+  await nav(page, "Choke health");
+  await expect(page.getByTestId("cavitation")).toBeVisible();
+  await expect(page.getByText(/not a CFD result/)).toBeVisible();
+  await expect(page.getByTestId("cavitation-risk")).not.toHaveText("Unavailable");
 });
 
 test("exercise 7: integrated three-phase production, sand and choke health starts guided", async ({ page }) => {

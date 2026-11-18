@@ -20,8 +20,8 @@ network:
 
 Consequences:
 
-- sand reaches the tree, the choke and the manifold with the fluid transit
-  time;
+- sand reaches the tree, the choke, the detector (SDT-101, on the choke
+  outlet) and the manifold with the fluid transit time;
 - **it stops when the flow stops**;
 - it reverses with reverse flow.
 
@@ -30,7 +30,8 @@ add fluid mass. The production path has no splitting branches.
 
 **Sand at a location** = transported fraction × local mass flow:
 
-- at the choke inlet, used for erosion.
+- at the choke inlet, used for erosion;
+- at the choke outlet, used by the detector.
 
 **Steady model.** The sand at the choke equals the produced sand.
 
@@ -47,8 +48,8 @@ add fluid mass. The production path has no splitting branches.
 
       V_c = F_L √(2 g D (ρ_s/ρ_l − 1)),   F_L = 0.6
 
-  The check uses the fine-sand, low-concentration value; it is shown in
-  the Sand source panel of the Choke health page. A flagged segment means "may deposit", not "has deposited".
+  The check uses the fine-sand, low-concentration value; it is shown on
+  Sand monitoring. A flagged segment means "may deposit", not "has deposited".
 - **Numerical dispersion.** Upwind discretisation spreads a sand front, as
   for chemicals.
 
@@ -58,7 +59,8 @@ add fluid mass. The production path has no splitting branches.
 
 - after sanding starts, sand at the choke is lower than the produced sand at
   first (transit time);
-- they converge within 5 % once the path is filled.
+- they converge within 5 % once the path is filled;
+- the detector then reads and alarms.
 
 The mass conservation of the shared transport grid is covered in
 `backend/tests/test_multiphase.py`.

@@ -8,7 +8,7 @@ The 14-stage integrated scenario of the engineering specification (§7.1):
  4 open the production valves        11 monitor choke erosion
  5 adjust the choke                  12 review cumulative wear
  6 oil / gas / water on the MPFM     13 receive the inspection recommendation
- 7 sand reaches the choke             14 review uncertainty and the maintenance explanation
+ 7 sand on the detector SDT-101      14 review uncertainty and the maintenance explanation
 
 Every task is judged from the SIMULATION STATE, predictions and data
 questions are resolved from what this run actually did, and every review
@@ -53,6 +53,7 @@ def capture(e: SimulationEngine) -> dict[str, Any]:
     on = sand.get("onset") or {}
     crit = {c["key"]: c for c in sc.get("criteria", [])}
     first = crit.get(sc.get("first_limit") or "", {})
+    det = sc.get("detector") or {}
     vel = sc.get("velocities") or {}
     return {
         "sim_time_s": e.time_s,
@@ -71,6 +72,9 @@ def capture(e: SimulationEngine) -> dict[str, Any]:
         "produced_kg_d": sand.get("produced_kg_d"),
         "at_choke_kg_d": sand.get("at_choke_kg_d"),
         "screen_passing": (sand.get("screen") or {}).get("passing_fraction"),
+        "detector_g_s": det.get("reading_g_s"),
+        "detector_true_g_s": det.get("true_g_s"),
+        "detector_alarm": det.get("alarm"),
         "jet_velocity_m_s": vel.get("u_jet"),
         "critical_flow": vel.get("critical_flow"),
         "service_days": sc.get("service_days"),
@@ -285,6 +289,21 @@ def _rates_table(obs: Obs, keys: list[tuple[str, str]]) -> dict:
     ]}
 
 
+def _sand_at_detector(e):
+    s = e.sand
+    return s is not None and _running(e) and bool(s.det.get("reading_kg_s")) and s.det.get("status") in ("OK", "OVER_RANGE")
+
+
+def _sand_hint(e):
+    s = e.sand
+    if s is None:
+        return "Sand model unavailable."
+    src = getattr(s, "last_source", None)
+    if src and src["onset"].available and (src["onset"].risk_index or 0) <= 1:
+        return "The drawdown is still below the critical sanding drawdown - no sand is produced."
+    return "Sand is travelling up the tubing to the choke - watch SDT-101 on the Christmas tree page (use 60x)."
+
+
 def _review_choke(obs: Obs, preds: dict) -> dict:
     b, c = obs["base"], obs["c1"]
     p = preds.get("p_risk")
@@ -311,7 +330,9 @@ def _review_transport(obs: Obs, preds: dict) -> dict:
     dt = (t["sim_time_s"] - c2["sim_time_s"]) / 60
     text = (f"After the drawdown change it took about {dt:.0f} minutes of simulated time until the sand arriving at the choke matched the "
             f"sand leaving the screens ({t['at_choke_kg_d']:.1f} of {t['produced_kg_d']:.1f} kg/d). Sand is carried by the production flow - "
-            "it needs the fluid transit time up ~2.5 km of tubing, and it stops when the flow stops.")
+            "it needs the fluid transit time up ~2.5 km of tubing, and it stops when the flow stops. SDT-101 on the choke outlet now reads "
+            f"{(t['detector_g_s'] or 0):.3f} g/s (true {(t['detector_true_g_s'] or 0):.3f} g/s): an acoustic detector has a calibration "
+            "uncertainty and needs flow velocity to hear the impacts.")
     return {"text": text}
 
 
@@ -354,24 +375,24 @@ EXERCISE = ExerciseDefinition(
     objectives=[
         "Bring a three-phase well on line and read oil, gas and water rates on the MPFM at standard conditions.",
         "Relate choke opening and drawdown to the sanding risk (critical drawdown) and the sand rate.",
-        "Follow sand from the formation through the screens to the choke.",
+        "Follow sand from the formation through the screens to the choke and the SDT-101 sand detector.",
         "Interpret choke erosion, cumulative wear, remaining life and the uncertainty of the prediction.",
         "Explain a maintenance recommendation and what would improve its confidence.",
     ],
     initial_configuration=[
         "XT workstation three-phase well (GOR 120 Sm3/Sm3, 35 API) - SHUT IN: production wing valve closed.",
-        "Choke at 30 %; SCSSV and PMV open; MPFM-201 on the manifold.",
+        "Choke at 30 %; SCSSV and PMV open; MPFM-201 on the manifold; sand detector SDT-101 on the choke outlet.",
         "Complete ILLUSTRATIVE sand / choke inputs (geomechanics, standalone screens, plug & cage tungsten-carbide trim).",
     ],
     instructions=[
-        "Work on the Christmas tree, Multiphase flow, MPFM monitoring and Choke health pages.",
+        "Work on the Christmas tree, Multiphase flow, MPFM monitoring, Sand monitoring and Choke health pages.",
         "Use the speed control (60x) when waiting for flow, sand transport or pressure transients.",
         "Make each prediction BEFORE acting; it is resolved from what your simulation actually does.",
     ],
     expected_observations=[
         "All three phase rates appear at the MPFM once flow reaches the manifold, with a stated uncertainty.",
         "Sand starts when the drawdown exceeds the critical drawdown and grows faster than the drawdown.",
-        "Sand reaches the choke only after the fluid transit time.",
+        "Sand reaches the choke and the detector only after the fluid transit time.",
         "Wear accumulates with sand and time; an inspection is recommended when the configured allowance fraction is reached.",
     ],
     capture=capture,
@@ -407,6 +428,10 @@ EXERCISE = ExerciseDefinition(
              "Set CHK-101 to 40 % on the Christmas tree page and let the pressures settle.",
              condition=_choke_at(C1), condition_hint=_choke_hint(C1), record_as="c1"),
         Step("r_choke", "review", "Review: production and sanding risk", review=_review_choke),
+        Step("t_detector", "task", "7 - Sand on the detector",
+             "Watch SDT-101 on the choke outlet (Christmas tree page or Sand monitoring). The task completes when the detector "
+             "measures the sand that has travelled up the well.",
+             condition=_sand_at_detector, condition_hint=_sand_hint, record_as="detected"),
         Step("p_sand", "prediction", "Predict: increase the drawdown",
              f"You will open the choke to {C2:g} %, increasing the drawdown. Compared with the drawdown increase, the formation sand rate will:",
              options=[Option("a", "Increase MORE than proportionally"), Option("b", "Increase in proportion"),
@@ -416,11 +441,11 @@ EXERCISE = ExerciseDefinition(
              f"Set CHK-101 to {C2:g} % and let the pressures settle.",
              condition=_choke_at(C2), condition_hint=_choke_hint(C2), record_as="c2"),
         Step("r_sand", "review", "9 - Review: sand production follows the sanding model", review=_review_sand),
-        Step("t_transport", "task", "7 & 10 - Follow the sand transport",
+        Step("t_transport", "task", "10 - Follow the sand transport",
              "The extra sand is now travelling up the tubing. The task completes when the sand arriving at the choke matches the "
-             "sand passing the screens (Sand source panel on the Choke health page).",
+             "sand passing the screens (Sand monitoring page).",
              condition=_transported, condition_hint=_transport_hint, record_as="transport"),
-        Step("r_transport", "review", "Review: sand transport", review=_review_transport),
+        Step("r_transport", "review", "Review: sand transport and detection", review=_review_transport),
         Step("r_erosion", "review", "11 - Monitor the choke erosion", review=_review_erosion),
         Step("t_ff", "task", "12 - Review cumulative wear",
              "On Choke health, fast-forward the operation by at least 365 days (quasi-steady at today's conditions) and look at the "

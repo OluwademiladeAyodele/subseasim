@@ -140,7 +140,7 @@ def test_lines_are_connected(layout):
 def test_components_sit_on_their_flow_path(layout):
     lines = {ln.id: ln for ln in layout.lines}
     for c in layout.components:
-        if not c.flow_path or c.type in ("tag_panel", "choke_panel", "header_panel"):
+        if not c.flow_path or c.type in ("tag_panel", "choke_panel", "sand_detector", "header_panel"):
             continue
         ln = lines[c.flow_path]
         d = min(
@@ -199,7 +199,8 @@ def test_plain_engineering_tags_without_display_aliases(scenario, layout):
     assert len(tags) == len(set(tags)), "tags must be unique"
     panels = [c.id for c in layout.components if c.type in ("tag_panel", "header_panel")]
     assert all(TAG.match(t) for t in panels), panels
-    assert not any(c.type == "sand_detector" or "3001" in c.id for c in layout.components)
+    assert not any("3001" in c.id for c in layout.components)
+    assert any(c.type == "sand_detector" and c.id == "SDT-101" for c in layout.components)
 
 
 # ------------------------------------------------------- control hydraulics

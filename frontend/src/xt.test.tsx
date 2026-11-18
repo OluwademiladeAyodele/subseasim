@@ -25,7 +25,7 @@ describe("XtSchematic (Christmas tree workstation)", () => {
       if (e.kind === "valve" || e.kind === "choke") expect(screen.getByTestId(`valve-${(e as RestrictionSnapshot).tag}`)).toBeInTheDocument();
       if (e.kind === "check_valve") expect(screen.getByTestId(`check-${(e as { tag: string }).tag}`)).toBeInTheDocument();
     }
-    for (const id of ["PTT-104", "PTT-107", "PT-404", "PDT-401", "PT-402", "PT-401", "PTT-001", "PTT-002", "PTT-103", "PTT-106", "CHK-101-panel"])
+    for (const id of ["PTT-104", "PTT-107", "PT-404", "PDT-401", "PT-402", "PT-401", "PTT-001", "PTT-002", "PTT-103", "PTT-106", "SDT-101", "CHK-101-panel"])
       expect(screen.getByTestId(`panel-${id}`)).toBeInTheDocument();
     for (const t of ["HSV-101", "HSV-102", "HSV-103", "HSV-104"]) expect(screen.getByTestId(`selector-${t}`)).toBeInTheDocument();
     expect(screen.getByTestId("xt-legend")).toBeInTheDocument();

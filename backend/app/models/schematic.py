@@ -28,7 +28,7 @@ Point = tuple[float, float]
 ComponentType = Literal[
     "gate_valve", "master_valve", "wing_valve", "swab_valve", "annulus_valve", "crossover_valve", "service_line_valve",
     "scssv", "choke", "injection_valve", "metering_valve", "check_valve", "selector_valve",
-    "tag_panel", "choke_panel", "header_panel", "inline_device", "junction", "button", "mpfm",
+    "tag_panel", "choke_panel", "header_panel", "inline_device", "junction", "button", "mpfm", "sand_detector",
 ]
 
 LineClass = Literal["production", "annulus", "service", "chemical", "methanol", "downhole_chemical", "hydraulic"]

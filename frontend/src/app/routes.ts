@@ -5,6 +5,7 @@ import {
   Gauge,
   type LucideIcon,
   LayoutDashboard,
+  Mountain,
   ListTree,
   Settings2,
   ShieldCheck,
@@ -28,6 +29,7 @@ export type RouteId =
   | "conditions"
   | "multiphase"
   | "mpfm"
+  | "sand"
   | "chokehealth"
   | "sandinputs"
   | "scenario"
@@ -51,6 +53,7 @@ export const ROUTES: RouteDef[] = [
   { id: "integrity", label: "Integrity tests", description: "Stroke, pressure-hold and inflow tests", icon: ShieldCheck, group: "Operate", key: "4" },
   { id: "multiphase", label: "Multiphase flow", description: "Oil, gas and water rates, phase behaviour, flow pattern and mass balance", icon: Waves, group: "Monitor" },
   { id: "mpfm", label: "MPFM monitoring", description: "Manifold multiphase flow meter: measured vs true, uncertainty and diagnostics", icon: Gauge, group: "Monitor" },
+  { id: "sand", label: "Sand monitoring", description: "SDT-101 sand detector, sanding onset, sand rates through the screens to the choke, transport", icon: Mountain, group: "Monitor" },
   { id: "chokehealth", label: "Choke health", description: "Sand source, choke erosion, remaining life, Cv tracking, calibration and recommendation", icon: HeartPulse, group: "Monitor" },
   { id: "trends", label: "Trends", description: "Process history against simulated time", icon: Activity, group: "Monitor", key: "5" },
   { id: "instruments", label: "Instruments", description: "Every transmitter, its value and quality", icon: Gauge, group: "Monitor", key: "6" },

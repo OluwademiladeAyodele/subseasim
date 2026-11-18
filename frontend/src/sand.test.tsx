@@ -51,6 +51,30 @@ describe("Choke health page", () => {
   });
 });
 
+describe("Cavitation screening on the choke health page", () => {
+  it("shows the screening result from the backend, labelled as not CFD", async () => {
+    current = base();
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
+    const c = current.sand_choke!.cavitation!;
+    expect(screen.getByTestId("cavitation-risk")).toHaveTextContent(c.risk!);
+    expect(screen.getByText(/not a CFD result/)).toBeInTheDocument();
+    expect(screen.getByTestId("cavitation-sigma")).toHaveTextContent(fmt(c.water!.sigma, 2));
+  });
+
+  it("lists the missing valve data and links to the inputs", async () => {
+    current = base();
+    const c = current.sand_choke!.cavitation!;
+    current.sand_choke = { ...current.sand_choke!, cavitation: { ...c, fl: null, vena_contracta_bara: null, risk: "Unavailable",
+      missing: ["liquid pressure-recovery factor FL of the trim (manufacturer)"] } };
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
+    expect(screen.getByTestId("cavitation-missing")).toHaveTextContent("FL");
+    await userEvent.click(screen.getByRole("button", { name: "Enter cavitation data" }));
+    expect(go).toHaveBeenCalledWith("sandinputs");
+  });
+});
+
 describe("Sand source on the choke health page", () => {
   it("shows the onset and the sand rates from the formation to the choke", async () => {
     current = base();
@@ -61,7 +85,20 @@ describe("Sand source on the choke health page", () => {
     expect(screen.getByTestId("risk-index")).toHaveTextContent(fmt(s.onset!.risk_index, 2));
     expect(screen.getByTestId("sand-produced")).toHaveTextContent(fmt(s.produced_kg_d, 2));
     expect(screen.getByTestId("sand-choke")).toHaveTextContent(fmt(s.at_choke_kg_d, 2));
-    expect(screen.queryByText(/detector/i)).toBeNull();
+  });
+});
+
+describe("Sand monitoring page", () => {
+  it("shows the SDT-101 detector against the sand source", async () => {
+    current = base();
+    const { SandPage } = await import("@/pages/SandPage");
+    render(<SandPage />);
+    const r = current.sand_choke!;
+    expect(screen.getByText(`Sand detector ${r.detector!.tag}`)).toBeInTheDocument();
+    expect(r.detector!.tag).toBe("SDT-101");
+    expect(screen.getByTestId("detector-status")).toHaveTextContent(r.detector!.alarm ? "ALARM" : r.detector!.status);
+    expect(screen.getByTestId("detector-reading")).toHaveTextContent(fmt(r.detector!.reading_g_s, 3));
+    expect(screen.getByTestId("sand-source")).toBeInTheDocument();
   });
 });
 
@@ -82,11 +119,15 @@ describe("Sand & choke inputs page", () => {
   });
 });
 
-describe("Tree workstation without a sand detector", () => {
-  it("draws no sand detector on the schematic", () => {
+describe("SDT-101 on the schematic", () => {
+  it("shows the live detector reading and opens sand monitoring", async () => {
     const s = base();
-    render(<XtSchematic state={s} schematic={s.schematic!} selection={null} onSelect={() => {}} onNavigate={() => {}} prefs={prefs} />);
-    expect(screen.queryByTestId("sand-detector")).toBeNull();
+    const onNavigate = vi.fn();
+    render(<XtSchematic state={s} schematic={s.schematic!} selection={null} onSelect={() => {}} onNavigate={onNavigate} prefs={prefs} />);
+    const det = s.sand_choke!.detector!;
+    expect(screen.getByTestId("panel-SDT-101")).toHaveTextContent(fmt(det.reading_g_s, 3));
     expect(screen.queryByTestId("panel-XT3001")).toBeNull();
+    await userEvent.click(screen.getByTestId("sand-detector"));
+    expect(onNavigate).toHaveBeenCalledWith("sand");
   });
 });

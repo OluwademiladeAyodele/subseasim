@@ -45,6 +45,26 @@ export interface SandChokeInputs {
     rate_coefficient_kg_m3: number | null;
     rate_exponent: number;
   };
+  detector: {
+    tag: string;
+    detector_type: "acoustic_non_intrusive" | "intrusive_erosion_probe";
+    calibration_uncertainty_pct: number;
+    min_velocity_m_s: number;
+    noise_floor_g_s: number;
+    alarm_threshold_g_s: number;
+    range_max_g_s: number;
+  };
+  cavitation: {
+    fl: number | null;
+    fl_table: { opening_pct: number; fl: number }[];
+    fl_source: string | null;
+    sigma_incipient: number | null;
+    sigma_constant: number | null;
+    sigma_damage: number | null;
+    threshold_source: string | null;
+    bubble_point_bara: number | null;
+    bubble_point_uncertainty_pct: number;
+  };
   choke: {
     design: "plug_and_cage" | "external_sleeve" | "needle_and_seat" | "other";
     model_label: string | null;
@@ -132,10 +152,45 @@ export interface WearCriterion {
   calibrated_by_inspection: boolean;
 }
 
+export interface CavitationPhase {
+  regime: string;
+  text: string;
+  sigma: number | null;
+}
+
+export interface CavitationResult {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  method?: string;
+  p1_bara?: number;
+  p2_bara?: number;
+  dp_bar?: number;
+  t_c?: number;
+  opening_pct?: number;
+  fl?: number | null;
+  fl_source?: string | null;
+  vena_contracta_bara?: number | null;
+  inlet_free_gas?: boolean;
+  gvf_inlet?: number;
+  oil?: CavitationPhase & { pb_bara: number; pb_source: string };
+  water?: (CavitationPhase & { pv_bara: number; ff: number; dp_choked_bar: number | null; choked: boolean | null; level: string }) | null;
+  regime?: string;
+  risk?: string;
+  limits?: { sigma_incipient: number | null; sigma_constant: number | null; sigma_damage: number | null; source: string | null };
+  damage_locations?: string[];
+  sensitivity?: { pb_low_bara: number; pb_high_bara: number; outlet_below_pb_low: boolean; outlet_below_pb_high: boolean; note: string } | null;
+  missing?: string[];
+  assumed?: string[];
+  notes?: string[];
+  limitations?: string[];
+}
+
 export interface SandChokeResults {
   available: boolean;
   reason?: string;
   service_days?: number;
+  cavitation?: CavitationResult;
   inputs_status?: Record<string, { complete: boolean; missing: string[] }>;
   sand?: {
     mode: string;
@@ -160,6 +215,19 @@ export interface SandChokeResults {
     screen: { available: boolean; passing_fraction: number | null; produced_d50_um: number | null; missing: string[]; notes: string[] };
     psd: { d50_um: number; sigma_ln: number } | null;
   } | null;
+  detector?: {
+    tag: string;
+    type: string;
+    status: string;
+    reading_g_s: number | null;
+    true_g_s: number | null;
+    alarm: boolean;
+    alarm_threshold_g_s: number;
+    velocity_m_s: number | null;
+    cumulative_measured_kg: number;
+    uncertainty_pct: number;
+    location: string;
+  };
   transport?: { model: string; deposition: { segment: number; v_sl: number; v_crit: number; risk: boolean }[]; deposition_risk_segments?: number; deposition_note?: string };
   velocities?: Record<string, number | null | boolean> | null;
   erosion?: {

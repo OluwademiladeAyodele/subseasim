@@ -2,7 +2,7 @@
 integrated scenario (§7.1) is completed from the SIMULATION STATE, and the
 resolved predictions / reviews are generated from what the run did.
 This is also the integrated system test: production, multiphase flow,
-MPFM, sanding, transport, erosion and the maintenance
+MPFM, sanding, transport, detection, erosion and the maintenance
 recommendation all run on one shared simulation state."""
 
 from __future__ import annotations
@@ -52,6 +52,7 @@ def played():
     _run_until(e, t, "t_c1")
     rev_choke = t.state(e)["current"]["review"]
     t.advance()
+    _run_until(e, t, "t_detector")
     t.answer("p_sand", "a")
     t.advance()
     e.command_valve("CHK-101", "set_position", C2)
@@ -81,7 +82,7 @@ def test_every_stage_completes_from_the_simulation(played):
     st = t.state(e)
     assert st["current"]["kind"] == "summary" and st["finished"]
     assert all(s["status"] == "complete" for s in st["steps"])
-    for key in ("base", "c1", "c2", "transport", "ff1", "insp"):
+    for key in ("base", "c1", "detected", "c2", "transport", "ff1", "insp"):
         assert key in t.observations
 
 
@@ -108,9 +109,10 @@ def test_sanding_follows_the_choke_and_drawdown(played):
     assert "risk index" in rev["choke"]["text"] and rev["sand"]["table"]["rows"]
 
 
-def test_transport_to_the_choke(played):
+def test_transport_and_detection(played):
     _, t, rev = played
-    c2, tr = t.observations["c2"], t.observations["transport"]
+    c2, tr, det = t.observations["c2"], t.observations["transport"], t.observations["detected"]
+    assert det["detector_g_s"] > 0
     assert tr["sim_time_s"] > c2["sim_time_s"]  # the new sand needed transit time
     assert tr["at_choke_kg_d"] == pytest.approx(tr["produced_kg_d"], rel=0.05)
     assert "minutes" in rev["transport"]["text"]

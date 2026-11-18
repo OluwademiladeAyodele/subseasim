@@ -102,6 +102,7 @@ Documents: `SAND_PRODUCTION_MODEL.md` and `SAND_TRANSPORT_MODEL.md`. Test:
 | Measured-unit conversions (kg/d, kg/h, g/s, pptb, ppm) | Hand calculation |
 | Missing data | Reported as unavailable, with no made-up values |
 | Transport | Transit delay, then sand at the choke equals produced sand within 5 % |
+| Sand detector SDT-101 | Reads and alarms once sand arrives; calibration bias, noise floor and minimum velocity as configured |
 
 **Not validated:** the post-onset sand rate is empirical and must be
 calibrated with field sand data. Deposition is screened but not simulated.
@@ -128,9 +129,27 @@ constants must be verified against the licensed document or vendor data.
 Trim-specific accuracy requires the user's inspection records (the
 calibration workflow exists for this).
 
+## 6a. Choke cavitation and flashing screening
+
+Document: `CHOKE_CAVITATION_MODEL.md`. Tests: `test_cavitation.py` and
+`sand.test.tsx`.
+
+| Check | Reference |
+|---|---|
+| Water saturation pressure | IAPWS-IF97 verification values (300, 500, 600 K), 1e-8 |
+| FF, vena-contracta pressure, choked liquid ΔP | Hand evaluation of IEC 60534-2-1 |
+| Cavitation index σ | Hand evaluation of (P1 − Pv)/(P1 − P2) |
+| Regimes (two-phase inlet, outgassing, gaseous / vapour cavitation, flashing) | Pressure ordering expected from theory |
+| σ limits never assumed; must decrease | Model property |
+| Follows the simulated choke (opening → lower ΔP → higher σ) | Integrated simulation |
+
+**Not validated:** this is screening. FL and the σ limits must come from the
+manufacturer for this trim; collapse location and damage rate are not
+computed.
+
 ## 7. Integrated system test: Exercise 7
 
-Test: `test_training_integrated.py`. It plays the integrated
+Test: `test_training_integrated.py`. It plays the 14-stage integrated
 scenario as an intern would, on one shared simulation state:
 
 1. three-phase well, shut in;
@@ -139,13 +158,14 @@ scenario as an intern would, on one shared simulation state:
 4. wing valve opened;
 5. the MPFM reads all three phases within its uncertainty;
 6. choke 30 → 40 %: the sanding risk index crosses 1;
-7. choke 40 → 65 %: drawdown increases;
-8. sand grows faster than drawdown;
-9. sand reaches the choke after its transit time;
-10. erosion rates by hole row;
-11. cumulative wear over ≥ 365 days;
-12. the inspection recommendation;
-13. the uncertainty and confidence questions.
+7. sand detected on SDT-101;
+8. choke 40 → 65 %: drawdown increases;
+9. sand grows faster than drawdown;
+10. sand reaches the choke after its transit time;
+11. erosion rates by hole row;
+12. cumulative wear over ≥ 365 days;
+13. the inspection recommendation;
+14. the uncertainty and confidence questions.
 
 Predictions are resolved from what the run did, and every review is
 generated from recorded observations.
@@ -159,9 +179,10 @@ pressure-behaviour suites run unchanged alongside these.
 |---|---|
 | PVT | Laboratory PVT report (Pb, Rs, Bo, viscosities) for the produced fluid |
 | Flow model | Well-test rates and pressures at several choke steps |
-| Sanding | Core TWC tests, stress data, sand-trap or well-test sand history |
+| Sanding | Core TWC tests, stress data, sand-trap or SDT-101 detector history |
 | Choke | Trim material and grade, cage drawings, the vendor Cv-versus-step table, inspection measurements with operating history |
 | MPFM | Comparison with test-separator measurements |
+| Cavitation | Manufacturer FL vs opening and σ limits for the trim; PVT-report bubble point |
 
 All of these are inputs in the app. The models accept them without any code
 change.
