@@ -15,6 +15,7 @@ One active job per session.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -26,6 +27,7 @@ BROADCAST_EVERY_S = 0.5
 KEEP_PER_SESSION = 20
 
 Step = tuple[float, str]
+_seq = itertools.count(1)
 
 
 class JobRejected(RuntimeError):
@@ -47,6 +49,8 @@ class Job:
     label: str
     params: dict
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    #: Submission order (timestamps have 1 s resolution, so they cannot order jobs).
+    seq: int = field(default_factory=lambda: next(_seq))
     state: str = "pending"
     progress: float = 0.0
     message: str = "queued"
@@ -82,7 +86,7 @@ class JobManager:
         self.kinds[kind] = factory
 
     def for_session(self, sid: str) -> list[Job]:
-        return sorted((j for j in self.jobs.values() if j.session_id == sid), key=lambda j: j.created_at, reverse=True)
+        return sorted((j for j in self.jobs.values() if j.session_id == sid), key=lambda j: j.seq, reverse=True)
 
     def get(self, jid: str) -> Job:
         try:

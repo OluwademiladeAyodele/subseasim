@@ -115,6 +115,21 @@ def test_one_active_job_per_session_and_unknown_kind():
     assert asyncio.run(main()).state == "completed"
 
 
+def test_jobs_are_listed_newest_first_even_within_the_same_second():
+    async def main():
+        m = _mgr()
+        s = SimpleNamespace(id="s1")
+        ids = []
+        for _ in range(3):
+            j = m.submit(s, "toy", {"n": 1})
+            ids.append(j.id)
+            await m.wait(j.id)
+        return m, ids
+
+    m, ids = asyncio.run(main())
+    assert [j.id for j in m.for_session("s1")] == ids[::-1]
+
+
 def test_job_stops_when_the_session_ends():
     async def main():
         m = _mgr()
