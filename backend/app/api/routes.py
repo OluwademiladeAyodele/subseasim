@@ -16,6 +16,7 @@ from app.api.schemas import (
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    SandCsvRequest,
     SelectorCommandRequest,
     SupplyRequest,
     LoadScenarioRequest,
@@ -275,6 +276,22 @@ async def sand_inputs(sid: str, req: SandChokeInputs) -> dict:
     s = _session(sid)
     s.engine.set_sand_inputs(req)
     return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/measurements/csv")
+async def sand_measurements_csv(sid: str, req: SandCsvRequest) -> dict:
+    from app.simulation.sand.measurements import CsvImportError
+
+    s = _session(sid)
+    try:
+        n = s.engine.import_sand_measurements(req.csv, req.replace)
+    except CsvImportError as exc:
+        raise HTTPException(422, {"message": str(exc), "errors": exc.errors}) from None
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    out = await _after_change(s)
+    out["imported"] = n
+    return out
 
 
 @router.post("/sessions/{sid}/sand-choke/example")

@@ -10,6 +10,7 @@ docs/CHOKE_MAINTENANCE_MODEL.md.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -67,6 +68,28 @@ class CompletionInputs(_S):
     bridging_factor: Annotated[float, Field(ge=1, le=5)] = 2.0
 
 
+MeasuredUnit = Literal["kg_h", "kg_d", "g_s", "pptb", "ppm_mass_liquid", "ppm_mass_total", "ppm_vol_liquid"]
+MeasurementMethod = Literal["sand_trap", "acoustic_detector", "intrusive_probe", "well_test_sample", "other"]
+
+
+class SandMeasurement(_S):
+    """One measured produced-sand value (at the wellhead, after the screens)."""
+
+    timestamp: datetime
+    value: NonNeg
+    unit: MeasuredUnit = "kg_d"
+    method: MeasurementMethod = "other"
+    #: Relative standard uncertainty [%]; empty: the default measured uncertainty.
+    uncertainty_pct: NonNeg | None = None
+    #: Liquid rate and water cut when measured - needed to convert concentration units to kg/d.
+    liquid_rate_sm3_d: Pos | None = None
+    water_cut: Frac | None = None
+    d10_um: Pos | None = None
+    d50_um: Pos | None = None
+    d90_um: Pos | None = None
+    note: str | None = None
+
+
 class SandInputs(_S):
     grain_density_kg_m3: Pos = 2650.0
     #: Formation particle-size distribution (sieve / laser) [micrometres].
@@ -77,9 +100,17 @@ class SandInputs(_S):
     mode: Literal["predictive", "measured"] = "predictive"
     #: Measured / configured produced sand (at the wellhead, i.e. after the screens).
     measured_value: NonNeg | None = None
-    measured_unit: Literal["kg_h", "kg_d", "g_s", "pptb", "ppm_mass_liquid", "ppm_mass_total", "ppm_vol_liquid"] = "kg_d"
+    measured_unit: MeasuredUnit = "kg_d"
     #: Relative standard uncertainty of the measured sand rate [%].
     measured_uncertainty_pct: NonNeg = 30.0
+    #: Measured sand history (CSV import or manual entry). In measured mode the LATEST record
+    #: sets the produced sand rate (overriding measured_value).
+    measurements: Annotated[list[SandMeasurement], Field(max_length=5000)] = Field(default_factory=list)
+    #: Abnormal-increase review trigger: latest rate > ratio x median of the previous N records
+    #: (and, if given, by at least the minimum increase). Configurable - not a safety limit.
+    abnormal_increase_ratio: Annotated[float, Field(gt=1, le=100)] = 2.0
+    abnormal_baseline_count: Annotated[int, Field(ge=1, le=50)] = 5
+    abnormal_min_increase_kg_d: NonNeg | None = None
     #: Predictive model: formation sand mass per m3 of produced liquid (reservoir conditions) at
     #: twice the critical drawdown [kg/m3]. MUST be calibrated (sand-trap / detector data).
     rate_coefficient_kg_m3: NonNeg | None = None

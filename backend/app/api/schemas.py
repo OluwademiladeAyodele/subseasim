@@ -67,6 +67,11 @@ class MPFMFaultRequest(_Req):
     pt_failed: bool | None = None
 
 
+class SandCsvRequest(_Req):
+    csv: str = Field(max_length=2_000_000)
+    replace: bool = False
+
+
 class FastForwardRequest(_Req):
     days: Annotated[float, Field(gt=0, le=3650)]
 

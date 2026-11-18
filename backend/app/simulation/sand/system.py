@@ -23,6 +23,7 @@ from app.simulation.choke import cavitation as cav
 from app.simulation.multiphase.correlations import sachdeva_critical_ratio
 from app.simulation.multiphase.dynamic import SAND_CH
 from app.simulation.sand import erosion as er
+from app.simulation.sand import measurements as smeas
 from app.simulation.sand import production as sp
 from app.simulation.fluid_properties.black_oil import bubble_point
 
@@ -124,6 +125,8 @@ class SandChokeSystem:
     # ============================================================ inputs
     def apply_inputs(self, inputs: SandChokeInputs) -> None:
         self.inputs = inputs
+        # sand inputs as used by the model (latest measured record in measured mode)
+        self.sand_eff, self.driving_measurement = smeas.effective_sand(inputs.sand)
         e = self.engine
         self.choke = production_choke(e)
         configure_choke(self.choke, inputs)
@@ -341,11 +344,11 @@ class SandChokeSystem:
         q_liq_sc = op.w_in / float(bo.mass_per_liquid_sc(op.gor, op.wc)) if op.w_in > 0 else 0.0
         p = bo.params
         liq_mass = q_liq_sc * ((1 - op.wc) * p.rho_oil_sc + op.wc * p.rho_water_sc)
-        out = {"onset": onset, "mode": inp.sand.mode, "formation_kg_s": None, "produced_kg_s": None, "missing": [], "assumed": list(onset.assumed),
+        out = {"onset": onset, "mode": self.sand_eff.mode, "formation_kg_s": None, "produced_kg_s": None, "missing": [], "assumed": list(onset.assumed),
                "q_liquid_sc_m3s": q_liq_sc}
         f = self.screen.passing_fraction if self.screen.available else None
-        if inp.sand.mode == "measured":
-            m = sp.measured_rate_kg_s(inp.sand, q_liq_sc, liq_mass, op.w_in)
+        if self.sand_eff.mode == "measured":
+            m = sp.measured_rate_kg_s(self.sand_eff, q_liq_sc, liq_mass, op.w_in)
             if m is None:
                 out["missing"].append("measured sand value")
             else:
@@ -614,11 +617,15 @@ class SandChokeSystem:
     def _sigma_total(self, calibrated: bool) -> tuple[float, dict]:
         inp = self.inputs
         s_k = self.sigma_c if calibrated else SIGMA_K_PRIOR
-        s_sand = (inp.sand.measured_uncertainty_pct / 100.0) if inp.sand.mode == "measured" else SIGMA_SAND_PREDICTED
+        s_sand = (self.sand_eff.measured_uncertainty_pct / 100.0) if self.sand_eff.mode == "measured" else SIGMA_SAND_PREDICTED
         n = self.mat_trim.n if self.mat_trim else 2.6
         s_u = n * 0.05  # 5 % (1 sigma) on the jet velocity
         tot = math.sqrt(s_k**2 + s_sand**2 + s_u**2)
         return tot, {"erosion model (K, geometry)": s_k, "sand rate": s_sand, "particle velocity": s_u}
+
+    def measured_history(self) -> dict:
+        p = self.engine.bo.params
+        return smeas.report(self.inputs.sand, p.rho_oil_sc, p.rho_water_sc, p.rho_gas_sc, p.gor_sm3_sm3)
 
     def erosional_velocity(self) -> dict:
         """API RP 14E erosional-velocity screening at the gallery, the choke
@@ -707,6 +714,7 @@ class SandChokeSystem:
             "inputs_status": self.input_status(),
             "cavitation": self.cavitation(op),
             "erosional_velocity": self.erosional_velocity(),
+            "measured_history": self.measured_history(),
             "sand": None if not src else {
                 "mode": src["mode"],
                 "formation_kg_d": None if src["formation_kg_s"] is None else src["formation_kg_s"] * S_PER_DAY,
@@ -852,7 +860,7 @@ class SandChokeSystem:
         factors = []
         if self.mat_trim is None or not self.geom.valid:
             return {"category": "unavailable", "factors": ["trim material and cage geometry are required"]}
-        sand_measured = inp.sand.mode == "measured" and inp.sand.measured_value is not None
+        sand_measured = self.sand_eff.mode == "measured" and self.sand_eff.measured_value is not None
         factors.append("sand rate MEASURED" if sand_measured else "sand rate PREDICTED (empirical, needs calibration)")
         factors.append(f"trim erosion model calibrated by {n_cal} inspection(s)" if n_cal else "trim erosion model NOT calibrated by inspection")
         if self.mat_trim.source.startswith("DNV"):
@@ -909,7 +917,7 @@ class SandChokeSystem:
 
     def input_status(self) -> dict:
         inp = self.inputs
-        g, c, s, ch, a = inp.geomechanics, inp.completion, inp.sand, inp.choke, inp.acceptance
+        g, c, s, ch, a = inp.geomechanics, inp.completion, self.sand_eff, inp.choke, inp.acceptance
 
         def sect(req: list[tuple[str, object]]) -> dict:
             miss = [n for n, v in req if v in (None, [], "")]

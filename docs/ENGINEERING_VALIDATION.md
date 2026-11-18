@@ -101,6 +101,7 @@ Documents: `SAND_PRODUCTION_MODEL.md` and `SAND_TRANSPORT_MODEL.md`. Test:
 | Screen retention and damage | Closed form |
 | Measured-unit conversions (kg/d, kg/h, g/s, pptb, ppm) | Hand calculation |
 | Missing data | Reported as unavailable, with no made-up values |
+| Measured sand history: CSV import, conversion, abnormal-increase trigger | Hand calculation; atomic rejection of bad files (`test_sand_measurements.py`) |
 | Transport | Transit delay, then sand at the choke equals produced sand within 5 % |
 | Sand detector SDT-101 | Reads and alarms once sand arrives; calibration bias, noise floor and minimum velocity as configured |
 

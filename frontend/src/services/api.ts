@@ -28,6 +28,11 @@ function detailMessage(body: unknown): string {
   if (body && typeof body === "object" && "detail" in body) {
     const d = (body as { detail: unknown }).detail;
     if (typeof d === "string") return d;
+    if (d && typeof d === "object" && "errors" in d) {
+      // line-by-line import errors, e.g. the sand measurement CSV
+      const o = d as { message?: string; errors: { line: number; error: string }[] };
+      return `${o.message ?? "invalid file"}: ${o.errors.map((e) => `line ${e.line}: ${e.error}`).join("; ")}`;
+    }
     if (Array.isArray(d)) {
       return d
         .map((e) => {
@@ -77,6 +82,8 @@ export const api = {
   mpfmFaults: (sid: string, body: Record<string, number | boolean>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/mpfm/faults`, body),
   mpfmCalibrate: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/mpfm/calibrate`),
   sandInputs: (sid: string, body: SandChokeInputs) => request<SessionPayload>("PUT", `/api/sessions/${sid}/sand-choke/inputs`, body),
+  sandCsv: (sid: string, csv: string, replace: boolean) =>
+    request<SessionPayload & { imported: number }>("POST", `/api/sessions/${sid}/sand-choke/measurements/csv`, { csv, replace }),
   sandExample: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/sand-choke/example`),
   sandFastForward: (sid: string, days: number) => request<SessionPayload>("POST", `/api/sessions/${sid}/sand-choke/fast-forward`, { days }),
   pump: (sid: string, chem: string, body: { running?: boolean; discharge_pressure_pa?: number }) =>

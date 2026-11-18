@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { fmt } from "@/lib/units";
@@ -113,6 +113,52 @@ describe("Sand monitoring page", () => {
     expect(screen.getByTestId("detector-status")).toHaveTextContent(r.detector!.alarm ? "ALARM" : r.detector!.status);
     expect(screen.getByTestId("detector-reading")).toHaveTextContent(fmt(r.detector!.reading_g_s, 3));
     expect(screen.getByTestId("sand-source")).toBeInTheDocument();
+  });
+
+  it("trends the measured sand history and flags the abnormal increase from the backend", async () => {
+    current = base();
+    const { SandPage } = await import("@/pages/SandPage");
+    render(<SandPage />);
+    const h = current.sand_choke!.measured_history!;
+    expect(h.count).toBe(5);
+    expect(screen.getByTestId("abnormal-status")).toHaveTextContent("ABNORMAL INCREASE");
+    expect(screen.getByTestId("abnormal-text")).toHaveTextContent(h.abnormal.text);
+    expect(screen.getByRole("img", { name: "Measured sand rate history" })).toBeInTheDocument();
+    expect(screen.getByText(/Predictive mode: history trended and checked/)).toBeInTheDocument();
+  });
+});
+
+describe("Measured sand history inputs", () => {
+  it("exports the records as CSV that the backend importer accepts", async () => {
+    const { toCsv } = await import("@/pages/MeasuredSandPanel");
+    const rows = base().sand_choke_inputs!.sand.measurements;
+    const csv = toCsv(rows);
+    expect(csv.split("\n")[0]).toBe("timestamp,value,unit,method,uncertainty_pct,liquid_rate_sm3_d,water_cut,d10_um,d50_um,d90_um,note");
+    expect(csv.trim().split("\n").length).toBe(rows.length + 1);
+    expect(csv).toContain("acoustic_detector");
+  });
+
+  it("imports a CSV file and edits a record in the draft", async () => {
+    current = base();
+    const sandCsv = vi.fn().mockResolvedValue(true);
+    Object.assign(actions, { sandCsv });
+    const { SandInputsPage } = await import("@/pages/SandInputsPage");
+    render(<SandInputsPage />);
+    expect(screen.getByTestId("measurement-table").querySelectorAll("tbody tr").length).toBe(5);
+    const file = new File(["timestamp,value,unit\n2025-06-01,3,kg/d\n"], "sand.csv", { type: "text/csv" });
+    await userEvent.upload(screen.getByTestId("sand-csv-file"), file);
+    await waitFor(() => expect(sandCsv).toHaveBeenCalledWith("timestamp,value,unit\n2025-06-01,3,kg/d\n", false));
+    const v = screen.getByLabelText("measurement 1 value");
+    await userEvent.clear(v);
+    await userEvent.type(v, "2.5");
+    expect(screen.getByTestId("sand-csv-import")).toBeDisabled(); // unsaved draft: import blocked
+    // removing a row shifts the next record's value into the cell
+    const second = current.sand_choke_inputs!.sand.measurements[1].value;
+    await userEvent.click(screen.getByRole("button", { name: "remove measurement 2" }));
+    expect(screen.getByLabelText("measurement 2 value")).toHaveValue(String(current.sand_choke_inputs!.sand.measurements[2].value));
+    expect(second).not.toBe(current.sand_choke_inputs!.sand.measurements[2].value);
+    await userEvent.click(screen.getByTestId("sand-inputs-save"));
+    expect(actions.sandInputs.mock.calls.at(-1)![0].sand.measurements[0].value).toBe(2.5);
   });
 });
 

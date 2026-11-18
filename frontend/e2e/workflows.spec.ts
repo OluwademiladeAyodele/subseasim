@@ -239,3 +239,16 @@ test("exercise 7: integrated three-phase production, sand and choke health start
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByTestId("training-step-title")).toContainText("Configure the reservoir fluid");
 });
+
+test("measured sand history: CSV import, abnormal increase, bad files rejected line by line", async ({ page }) => {
+  await nav(page, "Sand & choke inputs");
+  const csv = "timestamp,value,unit,method\n2025-01-01,2,kg/d,sand trap\n2025-02-01,2.2,kg/d,sand trap\n2025-03-01,1.9,kg/d,sand trap\n2025-04-01,7,kg/d,sand trap\n";
+  await page.getByTestId("sand-csv-file").setInputFiles({ name: "sand.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(page.getByTestId("measurement-table").locator("tbody tr")).toHaveCount(4, { timeout: 15_000 });
+  await nav(page, "Sand monitoring");
+  await expect(page.getByTestId("abnormal-status")).toHaveText("ABNORMAL INCREASE");
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-csv-file").setInputFiles({ name: "bad.csv", mimeType: "text/csv", buffer: Buffer.from("timestamp,value\n2025-05-01,-3\n") });
+  await expect(page.getByTestId("error-banner")).toContainText("line 2");
+  await expect(page.getByTestId("measurement-table").locator("tbody tr")).toHaveCount(4);
+});

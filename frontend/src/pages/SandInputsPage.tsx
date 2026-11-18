@@ -11,6 +11,8 @@ import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Input, Panel, Select } from "@/components/ui/primitives";
 import type { SandChokeInputs } from "@/types/sand";
 
+import { MeasuredSandPanel } from "./MeasuredSandPanel";
+
 type Draft = SandChokeInputs;
 
 function NumField({ label, unit, value, onChange, hint, testId }: { label: string; unit?: string; value: number | null; onChange: (v: number | null) => void; hint?: string; testId?: string }) {
@@ -164,6 +166,11 @@ export function SandInputsPage() {
             <SelField label="Sand rate source" value={s.mode} onChange={(v) => v && set("sand", { mode: v })} options={[["predictive", "Predictive (geomechanics + calibrated coefficient)"], ["measured", "Measured / configured"]]} />
             {s.mode === "measured" ? (
               <>
+                {s.measurements.length > 0 && (
+                  <p className="mb-1 text-[12px] text-accent" data-testid="history-drives-model">
+                    The latest record of the measured sand history ({s.measurements.length} records) sets the rate; the value below is used only without a history.
+                  </p>
+                )}
                 <NumField label="Measured sand (at wellhead)" unit="" value={s.measured_value} onChange={(v) => set("sand", { measured_value: v })} />
                 <SelField label="Unit / basis" value={s.measured_unit} onChange={(v) => v && set("sand", { measured_unit: v })}
                   options={[["kg_d", "kg/day"], ["kg_h", "kg/h"], ["g_s", "g/s"], ["pptb", "pptb (lb per 1000 bbl liquid, std)"], ["ppm_mass_liquid", "ppm by mass of liquid"],
@@ -297,6 +304,8 @@ export function SandInputsPage() {
             <Input aria-label="Cavitation data source" value={d.cavitation.threshold_source ?? ""} onChange={(e) => set("cavitation", { threshold_source: e.target.value || null })} />
           </label>
         </Panel>
+
+        <MeasuredSandPanel d={d} setD={setD} dirty={dirty} onImport={(csv, replace) => actions.sandCsv(csv, replace)} />
 
         <Panel title="Operating history (pre-loads wear)" className="xl:col-span-2" subtitle="Past periods since the trim was installed, e.g. monthly averages. Applied on save.">
           <div className="overflow-x-auto">

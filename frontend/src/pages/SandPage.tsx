@@ -12,6 +12,7 @@ import { Badge, Panel, Stat } from "@/components/ui/primitives";
 import { fmt } from "@/lib/units";
 import type { SandChokeResults } from "@/types/sand";
 
+import { MeasuredHistoryPanel } from "./MeasuredHistoryPanel";
 import { SandSourcePanel, Trend } from "./SandSource";
 
 export function SandPage() {
@@ -44,6 +45,7 @@ export function SandPage() {
             <Trend samples={samples} keys={["sand:detector_g_s", "sand:choke_g_s"]} labels={[`${det.tag} reading`, "simulated sand at choke"]} unit="g/s" />
           </Panel>
         )}
+        <MeasuredHistoryPanel h={r.measured_history} onInputs={() => go("sandinputs")} />
         <SandSourcePanel r={r} samples={samples} onInputs={() => go("sandinputs")} />
       </div>
     </PageBody>

@@ -39,6 +39,7 @@ export interface Actions {
   mpfmCalibrate: () => Promise<boolean>;
   sandInputs: (body: SandChokeInputs) => Promise<boolean>;
   sandExample: () => Promise<boolean>;
+  sandCsv: (csv: string, replace: boolean) => Promise<boolean>;
   sandFastForward: (days: number) => Promise<boolean>;
   supply: (id: string, available: boolean) => Promise<boolean>;
   integrityStart: (req: IntegrityTestRequest) => Promise<boolean>;
@@ -129,6 +130,7 @@ export function WorkstationProvider({
       mpfmCalibrate: () => run((sid) => api.mpfmCalibrate(sid)),
       sandInputs: (b) => run((sid) => api.sandInputs(sid, b)),
       sandExample: () => run((sid) => api.sandExample(sid)),
+      sandCsv: (csv, replace) => run((sid) => api.sandCsv(sid, csv, replace)),
       sandFastForward: (d) => run((sid) => api.sandFastForward(sid, d)),
       supply: (id, a) => run((sid) => api.supply(sid, id, a)),
       integrityStart: (req) => run((sid) => api.integrityStart(sid, req)),

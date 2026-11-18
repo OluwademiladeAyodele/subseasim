@@ -255,7 +255,29 @@ class SimulationEngine:
             self.dyn.net.refresh_restrictions()
         self.events.add(self.time_s, "instrument", f"Sand & choke inputs {label}: predictions recalculated"
                         + ("" if self.bo is not None else " (sand and erosion need the three-phase fluid model)"))
+        if self.sand is not None and inputs.sand.measurements:
+            ab = self.sand.measured_history()["abnormal"]
+            if ab["flag"]:
+                self.events.add(self.time_s, "alarm", f"Measured sand: {ab['text']}", component=self.sand.choke.tag if self.sand.choke else None,
+                                severity="warning")
         self._record_sample(force=True)
+
+    def import_sand_measurements(self, csv_text: str, replace: bool = False) -> int:
+        """Import measured sand records from CSV (atomic: an invalid line rejects the file)."""
+        from app.simulation.sand import measurements as smeas
+
+        base = self.sand_inputs
+        if base is None:
+            raise CommandRejected("this scenario has no sand / choke model")
+        recs = smeas.parse_csv(csv_text)
+        old = [] if replace else list(base.sand.measurements)
+        merged = old + recs
+        if len(merged) > 5000:
+            raise CommandRejected(f"too many records ({len(merged)} > 5000)")
+        inputs = base.model_copy(deep=True)
+        inputs.sand.measurements = merged
+        self.set_sand_inputs(inputs, f"measured sand history {'replaced' if replace else 'extended'} ({len(recs)} record(s) imported)")
+        return len(recs)
 
     def load_sand_example(self) -> None:
         if self.scenario.sand_choke_example is None:
@@ -1127,7 +1149,7 @@ class SimulationEngine:
             snap["tag_aliases"] = {k: v.model_dump() for k, v in self.scenario.tag_aliases.items()}
             snap["fluid_models"] = ["single_phase"] + (["black_oil"] if self.scenario.black_oil is not None else [])
             si = self.sand_inputs
-            snap["sand_choke_inputs"] = si.model_dump() if si is not None else None
+            snap["sand_choke_inputs"] = si.model_dump(mode="json") if si is not None else None
             snap["sand_choke_example_available"] = self.scenario.sand_choke_example is not None
             snap["erosion_materials"] = [{"key": m.key, "name": m.name, "k": m.k, "n": m.n, "density_kg_m3": m.density,
                                           "behaviour": m.behaviour, "source": m.source} for m in MATERIALS.values()]

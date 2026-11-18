@@ -6,6 +6,33 @@ export interface HoleRow {
   count: number;
 }
 
+export type MeasuredUnit = "kg_h" | "kg_d" | "g_s" | "pptb" | "ppm_mass_liquid" | "ppm_mass_total" | "ppm_vol_liquid";
+
+export interface SandMeasurement {
+  timestamp: string;
+  value: number;
+  unit: MeasuredUnit;
+  method: "sand_trap" | "acoustic_detector" | "intrusive_probe" | "well_test_sample" | "other";
+  uncertainty_pct: number | null;
+  liquid_rate_sm3_d: number | null;
+  water_cut: number | null;
+  d10_um: number | null;
+  d50_um: number | null;
+  d90_um: number | null;
+  note: string | null;
+}
+
+export interface MeasuredHistory {
+  count: number;
+  mode: string;
+  drives_model: boolean;
+  driving_record: { timestamp: string; value: number; unit_label: string; method: string } | null;
+  series: { timestamp: string; value: number; unit: MeasuredUnit; unit_label: string; method: string; uncertainty_pct: number | null; kg_d: number | null; note: string | null; d50_um: number | null }[];
+  abnormal: { flag: boolean; available: boolean; ratio: number | null; baseline_kg_d: number | null; latest_kg_d: number | null; latest_timestamp?: string; trigger_ratio: number; baseline_count: number; min_increase_kg_d: number | null; text: string };
+  notes: string[];
+  trigger_note: string;
+}
+
 export interface SandChokeInputs {
   geomechanics: {
     depth_tvd_m: number | null;
@@ -42,6 +69,10 @@ export interface SandChokeInputs {
     measured_value: number | null;
     measured_unit: "kg_h" | "kg_d" | "g_s" | "pptb" | "ppm_mass_liquid" | "ppm_mass_total" | "ppm_vol_liquid";
     measured_uncertainty_pct: number;
+    measurements: SandMeasurement[];
+    abnormal_increase_ratio: number;
+    abnormal_baseline_count: number;
+    abnormal_min_increase_kg_d: number | null;
     rate_coefficient_kg_m3: number | null;
     rate_exponent: number;
   };
@@ -206,6 +237,7 @@ export interface SandChokeResults {
   service_days?: number;
   cavitation?: CavitationResult;
   erosional_velocity?: ErosionalVelocityResult;
+  measured_history?: MeasuredHistory;
   inputs_status?: Record<string, { complete: boolean; missing: string[] }>;
   sand?: {
     mode: string;

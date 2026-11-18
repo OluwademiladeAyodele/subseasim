@@ -117,6 +117,59 @@ explicit basis:
 
 The 1-sigma uncertainty of the measurement is entered by the user.
 
+### Measured sand history
+
+Code: `backend/app/simulation/sand/measurements.py`. It is edited in the
+"Measured sand history" panel of the Sand & choke inputs page and trended on
+the Sand monitoring page.
+
+**Records.** Each record holds:
+
+- required: timestamp (ISO 8601) and value;
+- unit and method (sand trap, acoustic detector, intrusive probe, well-test
+  sample, other);
+- the 1σ uncertainty;
+- optionally: the liquid rate and water cut at the time, D10/D50/D90 and a
+  note.
+
+**CSV import.** The file has a header row with these columns:
+
+    timestamp, value, unit, method, uncertainty_pct, liquid_rate_sm3_d,
+    water_cut, d10_um, d50_um, d90_um, note
+
+- Only `timestamp` and `value` are required.
+- Units and methods accept common spellings, such as `kg/d`, `g/s`,
+  `sand trap` and `acoustic`.
+- The water cut may be written as a fraction or with `%`.
+- **The import is atomic.** A file with any invalid line is rejected whole,
+  with the error for every line, and nothing is imported.
+- The records can be added to the existing history or replace it, and can be
+  exported as CSV.
+
+**Conversion to kg/d** is used for the trend and the trigger:
+
+- mass rates convert directly;
+- concentrations (pptb, ppm) need the liquid rate recorded with the
+  measurement, plus the water cut for mass ppm;
+- concentrations are converted with the current stock-tank densities and
+  GOR, and the page says so;
+- a concentration without a liquid rate is shown but left out of the trend
+  test.
+
+**Which value drives the model.** In measured mode, the latest record sets
+the produced sand rate, unit and uncertainty used by the erosion model,
+replacing the single measured value. In predictive mode the history is
+trended and checked, but the prediction is used.
+
+**Abnormal-increase review trigger.** The trigger fires when the latest
+converted rate exceeds the ratio (default 2) times the median of the previous
+N converted records (default 5). An optional minimum increase in kg/d stops
+small-number noise from triggering it. All three are inputs.
+
+- It is a review prompt, **not a safety limit**.
+- When it fires, an alarm event is logged and the Sand monitoring page shows
+  "ABNORMAL INCREASE".
+
 **Predictive mode.** There is no universal equation for the sand rate after
 onset. Observed rates vary by orders of magnitude with rock, completion and
 history. The model therefore uses a **calibrated empirical** form:
@@ -151,6 +204,20 @@ history. The model therefore uses a **calibrated empirical** form:
 - screen retention, damage and no-screen cases;
 - every measured-unit conversion against a hand calculation;
 - a zero predicted rate below onset, and that the coefficient is required.
+
+`backend/tests/test_sand_measurements.py` checks:
+
+- CSV parsing of units, methods and percentage water cut;
+- that the import is atomic, with every bad line reported;
+- header errors;
+- a CSV round trip;
+- the kg/d conversion of mass and concentration records against hand
+  calculation;
+- the abnormal-increase trigger: baseline median, last-N window and minimum
+  increase;
+- that the latest record drives the model only in measured mode;
+- the engine import, alarm event and JSON payload;
+- the API import, and that a bad file leaves the history unchanged.
 
 ## References
 
