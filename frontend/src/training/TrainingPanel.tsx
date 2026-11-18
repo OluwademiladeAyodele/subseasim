@@ -38,11 +38,11 @@ export function TrainingPanel({ training, exercises, onStart, onAnswer, onAdvanc
             <H>Learning objectives</H>
             <List items={ex.objectives} />
             <div className="mt-3 flex justify-end">
-              <Button variant="primary" size="sm" onClick={() => onStart(ex.id)}>Start exercise</Button>
+              <Button variant="primary" size="sm" onClick={() => onStart(ex.id)} aria-label={`Start ${ex.title}`} data-testid={`start-${ex.id}`}>Start exercise</Button>
             </div>
           </div>
         ))}
-        <p className="text-[12.5px] text-dim">Exercises 1, 2 and 4–10 are planned (see docs/ROADMAP.md).</p>
+        <p className="text-[12.5px] text-dim">Exercises 1, 2, 4–6 and 8–10 are planned (see docs/ROADMAP.md).</p>
       </div>
     );
   }

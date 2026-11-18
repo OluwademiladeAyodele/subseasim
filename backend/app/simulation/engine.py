@@ -27,6 +27,7 @@ The engine is advanced only by ``advance(dt)`` in simulation seconds.
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -168,11 +169,12 @@ class SimulationEngine:
         self._settle_pending: str | None = None
         self._settle_since: float | None = None
         self.achieved_speed: float | None = None
+        #: True when the last advance was cut short by the wall-time budget.
+        self.budget_limited = False
         self.hyd: HydraulicResult | None = None
         self.ctrl = ControlHydraulics(scenario.control_hydraulics) if scenario.control_hydraulics else None
         self.sand: SandChokeSystem | None = None
         self._sand_health = None
-        self._sand_alarm = False
         self._sand_check_t = 0.0
         sand_inputs = self.sand_inputs
         if sand_inputs is not None:
@@ -282,13 +284,6 @@ class SimulationEngine:
                             f"Choke health {self._sand_health} -> {cat}: {snap['recommendation']['text']}", component=s.choke.tag if s.choke else None,
                             severity=sev)
         self._sand_health = cat
-        alarm = bool(snap["detector"]["alarm"])
-        if alarm != self._sand_alarm:
-            d = snap["detector"]
-            self.events.add(self.time_s, "alarm" if alarm else "instrument",
-                            f"{d['tag']} sand {'ALARM' if alarm else 'alarm cleared'}: {d['reading_g_s'] or 0:.3f} g/s "
-                            f"(threshold {d['alarm_threshold_g_s']:g} g/s)", component=d["tag"], severity="warning" if alarm else "info")
-            self._sand_alarm = alarm
 
     def set_mpfm_faults(self, **kw) -> None:
         if self.mpfm is None:
@@ -410,11 +405,15 @@ class SimulationEngine:
         self._measure()
 
     # ------------------------------------------------------------------- time
-    def advance(self, dt_total: float) -> None:
+    def advance(self, dt_total: float, wall_budget_s: float | None = None) -> None:
+        """Advance by ``dt_total`` simulated seconds. With ``wall_budget_s``,
+        stop computing once that much wall time is used: the remaining
+        simulated time is dropped (the simulation runs slower than requested
+        and ``achieved_speed`` reports it) instead of stalling the server."""
         if self.status != "running" or dt_total <= 0:
             return
         if self.dyn is not None:
-            self._advance_dynamic(dt_total)
+            self._advance_dynamic(dt_total, wall_budget_s)
             return
         moved = False
         for dt in substeps(dt_total, self.settings.max_substep_s):
@@ -440,14 +439,21 @@ class SimulationEngine:
         self._check_outcomes()
         self._record_sample()
 
-    def _advance_dynamic(self, dt_total: float) -> None:
+    def _advance_dynamic(self, dt_total: float, wall_budget_s: float | None = None) -> None:
         """Integrate on a fixed global step grid: results are identical for
-        any partitioning of the requested interval (deterministic)."""
+        any partitioning of the requested interval (deterministic). A wall
+        budget drops steps that cannot be computed in time - the trajectory
+        per simulated second is unchanged, only less simulated time passes."""
         dt = self.dt_dynamic
         self._time_debt += dt_total
         n = int(math.floor(self._time_debt / dt + 1e-9))
         self._time_debt -= n * dt
-        for _ in range(n):
+        self.budget_limited = False
+        t_end = time.perf_counter() + wall_budget_s if wall_budget_s else None
+        for k in range(n):
+            if t_end is not None and k > 0 and time.perf_counter() > t_end:
+                self.budget_limited = True
+                break
             try:
                 self._dynamic_step(dt)
             except DynamicSolverError as exc:
@@ -572,8 +578,6 @@ class SimulationEngine:
         sd = getattr(self, "sand", None)
         if sd is not None and sd.rates:
             s["sand:choke_g_s"] = sd.rates.get("m_sand_choke", 0.0) * 1000.0
-            r = sd.det.get("reading_kg_s")
-            s["sand:detector_g_s"] = None if r is None else r * 1000.0
             dd = sd.dd_cal()
             s["sand:max_hole_mm"] = float(dd.max()) * 1000.0 if dd.size else None
         m = getattr(self, "mpfm", None)
@@ -1079,6 +1083,7 @@ class SimulationEngine:
                 "solver_step_s": self.dt_dynamic if self.dyn is not None else self.settings.max_substep_s,
                 "fixed_step": self.dyn is not None,
                 "achieved_speed": self.achieved_speed,
+                "compute_limited": self.budget_limited,
                 "allowed_speeds": list(self.settings.allowed_time_scales),
             },
             "boundary": {

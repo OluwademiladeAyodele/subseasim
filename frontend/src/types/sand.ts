@@ -45,15 +45,6 @@ export interface SandChokeInputs {
     rate_coefficient_kg_m3: number | null;
     rate_exponent: number;
   };
-  detector: {
-    tag: string;
-    detector_type: "acoustic_non_intrusive" | "intrusive_erosion_probe";
-    calibration_uncertainty_pct: number;
-    min_velocity_m_s: number;
-    noise_floor_g_s: number;
-    alarm_threshold_g_s: number;
-    range_max_g_s: number;
-  };
   choke: {
     design: "plug_and_cage" | "external_sleeve" | "needle_and_seat" | "other";
     model_label: string | null;
@@ -169,19 +160,6 @@ export interface SandChokeResults {
     screen: { available: boolean; passing_fraction: number | null; produced_d50_um: number | null; missing: string[]; notes: string[] };
     psd: { d50_um: number; sigma_ln: number } | null;
   } | null;
-  detector?: {
-    tag: string;
-    type: string;
-    status: string;
-    reading_g_s: number | null;
-    true_g_s: number | null;
-    alarm: boolean;
-    alarm_threshold_g_s: number;
-    velocity_m_s: number | null;
-    cumulative_measured_kg: number;
-    uncertainty_pct: number;
-    location: string;
-  };
   transport?: { model: string; deposition: { segment: number; v_sl: number; v_crit: number; risk: boolean }[]; deposition_risk_segments?: number; deposition_note?: string };
   velocities?: Record<string, number | null | boolean> | null;
   erosion?: {

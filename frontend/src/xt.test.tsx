@@ -25,9 +25,9 @@ describe("XtSchematic (Christmas tree workstation)", () => {
       if (e.kind === "valve" || e.kind === "choke") expect(screen.getByTestId(`valve-${(e as RestrictionSnapshot).tag}`)).toBeInTheDocument();
       if (e.kind === "check_valve") expect(screen.getByTestId(`check-${(e as { tag: string }).tag}`)).toBeInTheDocument();
     }
-    for (const id of ["PTT3005", "PTT3004", "PT3014", "PD3014", "PT3030", "PT3031", "PTT3002", "PTT3003", "PTT3008", "PTT3009", "XT3001", "PCV3006-panel"])
+    for (const id of ["PTT-104", "PTT-107", "PT-404", "PDT-401", "PT-402", "PT-401", "PTT-001", "PTT-002", "PTT-103", "PTT-106", "CHK-101-panel"])
       expect(screen.getByTestId(`panel-${id}`)).toBeInTheDocument();
-    for (const t of ["SEL-LP-A", "SEL-LP-B", "SEL-HP-A", "SEL-HP-B"]) expect(screen.getByTestId(`selector-${t}`)).toBeInTheDocument();
+    for (const t of ["HSV-101", "HSV-102", "HSV-103", "HSV-104"]) expect(screen.getByTestId(`selector-${t}`)).toBeInTheDocument();
     expect(screen.getByTestId("xt-legend")).toBeInTheDocument();
   });
 
@@ -41,17 +41,18 @@ describe("XtSchematic (Christmas tree workstation)", () => {
     expect(svg.getAttribute("viewBox")).toBe(`0 0 ${s.schematic!.width} ${s.schematic!.height}`);
   });
 
-  it("shows reference display tags and reports engineering selections", async () => {
+  it("shows plain engineering tags and reports selections", async () => {
     const s = base();
     const { onSelect, onNavigate } = renderXt(s);
-    expect(screen.getAllByText("PMV3004").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("PCV3006").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("PMV-101").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CHK-101").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^[A-Z]+30\d\d$/)).toBeNull();
     await userEvent.click(screen.getByTestId("valve-PWV-101"));
     expect(onSelect).toHaveBeenLastCalledWith({ type: "element", id: "PWV" });
     await userEvent.click(screen.getByTestId("inst-PT-104"));
     expect(onSelect).toHaveBeenLastCalledWith({ type: "instrument", tag: "PT-104" });
-    await userEvent.click(screen.getByTestId("selector-SEL-HP-A"));
-    expect(onSelect).toHaveBeenLastCalledWith({ type: "selector", tag: "SEL-HP-A" });
+    await userEvent.click(screen.getByTestId("selector-HSV-103"));
+    expect(onSelect).toHaveBeenLastCalledWith({ type: "selector", tag: "HSV-103" });
     await userEvent.click(screen.getByTestId("connector-con-meoh"));
     expect(onSelect).toHaveBeenLastCalledWith({ type: "chemical", id: "methanol" });
     await userEvent.click(screen.getByTestId("btn-btn-scm-diagnostic"));
@@ -87,11 +88,11 @@ describe("HydraulicsPanel", () => {
     const s = base();
     const onSelector = vi.fn().mockResolvedValue(true);
     const onSupply = vi.fn().mockResolvedValue(true);
-    render(<HydraulicsPanel state={s} prefs={prefs} focus="SEL-LP-A" onSelector={onSelector} onSupply={onSupply} onSelect={() => {}} />);
-    await userEvent.click(screen.getByRole("button", { name: "SEL-LP-A close" }));
-    expect(onSelector).toHaveBeenCalledWith("SEL-LP-A", "close");
+    render(<HydraulicsPanel state={s} prefs={prefs} focus="HSV-101" onSelector={onSelector} onSupply={onSupply} onSelect={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "HSV-101 close" }));
+    expect(onSelector).toHaveBeenCalledWith("HSV-101", "close");
     await userEvent.click(screen.getByRole("button", { name: "LP supply trip" }));
     expect(onSupply).toHaveBeenCalledWith("LP", false);
-    expect(screen.getByTestId("supply-HP")).toHaveTextContent("SCSSV3003");
+    expect(screen.getByTestId("supply-HP")).toHaveTextContent("SCSSV-101");
   });
 });

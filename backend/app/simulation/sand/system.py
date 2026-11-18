@@ -54,7 +54,6 @@ class OperatingPoint:
     gor_choke: float
     wc_choke: float
     sand_frac_choke: float | None  # transported kg sand / kg fluid at the choke (None: steady)
-    sand_frac_detector: float | None
     flowline_d: float
 
 
@@ -131,8 +130,6 @@ class SandChokeSystem:
         self.mat_body = er.material(c.body_material, inputs.custom_materials)
         self.psd = sp.fit_psd(inputs.sand)
         self.screen = sp.screen_passing(inputs.completion, self.psd)
-        # detector calibration bias drawn once (calibrated instrument, unknown residual bias)
-        self.det_bias = float(np.exp(self.rng.normal(0.0, inputs.detector.calibration_uncertainty_pct / 100.0)))
         self._reset_state()
         # feedback before the history: the history integration sees the same worn-trim Cv
         # as the live simulation, so every save is self-consistent
@@ -149,11 +146,10 @@ class SandChokeSystem:
         self.body_loss = 0.0
         self.outlet_loss = 0.0
         self.service_s = 0.0
-        self.cum = {"formation_kg": 0.0, "produced_kg": 0.0, "retained_kg": 0.0, "choke_kg": 0.0, "detector_meas_kg": 0.0,
+        self.cum = {"formation_kg": 0.0, "produced_kg": 0.0, "retained_kg": 0.0, "choke_kg": 0.0,
                     "liquid_sm3": 0.0, "oil_sm3": 0.0, "gas_sm3": 0.0, "water_sm3": 0.0}
         self.log = WearLog()
         self.rates: dict = {}
-        self.det = {"reading_g_s": None, "status": "NOT_READY", "alarm": False}
         self.cv_track: deque = deque(maxlen=500)
         self._last_log = -math.inf
         self.log_cal_c = 0.0
@@ -270,7 +266,7 @@ class SandChokeSystem:
             wc = water / (oil + water) if oil + water > 0 else 0.0
             pos = 100.0 * h.choke_step / steps
             op = OperatingPoint(0, 0, w, 0, gor, wc, pos, h.upstream_pressure_bara * 1e5, h.downstream_pressure_bara * 1e5,
-                                h.temperature_c + 273.15, w, gor, wc, None, None, self._flowline_d())
+                                h.temperature_c + 273.15, w, gor, wc, None, self._flowline_d())
             m_sand = h.sand_kg_d / S_PER_DAY
             nsub = 10
             dt = h.days * S_PER_DAY / nsub
@@ -315,12 +311,11 @@ class SandChokeSystem:
             F = getattr(sg, "F_mass", d.grid.F)
             try:
                 s_c = float(sg.node_value(ch.from_node, F, d.grid.dT_throttle, "c", chem=SAND_CH))
-                s_d = float(sg.node_value(ch.to_node, F, d.grid.dT_throttle, "c", chem=SAND_CH))
             except (KeyError, AssertionError):
-                s_c = s_d = None
+                s_c = None
             return OperatingPoint(e.ipr.p_res, d.node_pressure(bh), rr * q_in, q_in, e.mp_gor, e.mp_wc, ch.actuator.position_pct,
                                   d.node_pressure(ch.from_node), d.node_pressure(ch.to_node), d.node_temperature(ch.from_node),
-                                  w_ch, g_c, w_c, s_c, s_d, self._flowline_d())
+                                  w_ch, g_c, w_c, s_c, self._flowline_d())
         h = getattr(e, "hyd", None)
         if h is None or not h.ok:
             return None
@@ -328,7 +323,7 @@ class SandChokeSystem:
         temps = e._node_temperatures()
         return OperatingPoint(e.ipr.p_res, h.node_pressure[bh], rr * q, q, e.mp_gor, e.mp_wc, ch.actuator.position_pct,
                               h.node_pressure[ch.from_node], h.node_pressure[ch.to_node], temps[ch.from_node], rr * q,
-                              e.mp_gor, e.mp_wc, None, None, self._flowline_d())
+                              e.mp_gor, e.mp_wc, None, self._flowline_d())
 
     # ---------------------------------------------------------- sand rate
     def sand_source(self, op: OperatingPoint) -> dict:
@@ -446,7 +441,6 @@ class SandChokeSystem:
         if e.dyn is not None and e.dyn.mp is not None:
             e.dyn.mp.comp.c_left[SAND_CH] = min(prod / op.w_in, 0.2) if op.w_in > 1e-6 else 0.0
         m_choke = (op.sand_frac_choke * max(op.w_choke, 0.0)) if op.sand_frac_choke is not None else prod
-        m_det = (op.sand_frac_detector * max(op.w_choke, 0.0)) if op.sand_frac_detector is not None else prod
         r = self._erode(op, m_choke, dt)
         self.rates = r
         self.service_s += dt
@@ -460,9 +454,6 @@ class SandChokeSystem:
         self.cum["oil_sm3"] += q_liq * (1 - op.wc) * dt
         self.cum["water_sm3"] += q_liq * op.wc * dt
         self.cum["gas_sm3"] += q_liq * (1 - op.wc) * op.gor * dt
-        v = r["velocities"]
-        # XT3001 is on the choke outlet down-leg: outlet-bore velocity when the bore is known
-        self._detector(m_det, v["u_outlet"] if v["u_outlet"] is not None else v["u_flowline"], dt)
         if self.service_s - self._last_log >= LOG_INTERVAL_S:
             self.log.add(self.service_s / S_PER_DAY, self.dd_base, self.plug_base, self.cum["choke_kg"], self.cum["liquid_sm3"])
             self._last_log = self.service_s
@@ -481,25 +472,6 @@ class SandChokeSystem:
         dd, plug, b, o = self.dd_base.copy(), self.plug_base, self.body_loss, self.outlet_loss
         self.rates = self._erode(op, m_choke, 0.0)
         self.dd_base, self.plug_base, self.body_loss, self.outlet_loss = dd, plug, b, o
-
-    # ---------------------------------------------------------- detector
-    def _detector(self, m_true: float, v: float, dt: float) -> None:
-        d = self.inputs.detector
-        status = "OK"
-        reading = m_true * self.det_bias + self.rng.normal(0.0, d.noise_floor_g_s / 1000.0)
-        if d.detector_type == "acoustic_non_intrusive" and v < d.min_velocity_m_s:
-            status = "LOW_VELOCITY"
-            reading = None
-        elif reading is not None and reading < 2 * d.noise_floor_g_s / 1000.0:
-            status = "BELOW_DETECTION"
-            reading = 0.0
-        if reading is not None:
-            reading = min(max(reading, 0.0), d.range_max_g_s / 1000.0)
-            if reading >= d.range_max_g_s / 1000.0:
-                status = "OVER_RANGE"
-            self.cum["detector_meas_kg"] += reading * dt
-        self.det = {"reading_kg_s": reading, "true_kg_s": m_true, "status": status, "velocity_m_s": v,
-                    "alarm": reading is not None and reading * 1000.0 >= d.alarm_threshold_g_s}
 
     # -------------------------------------------------------- Cv tracking
     def _cv_tracking(self) -> None:
@@ -678,13 +650,6 @@ class SandChokeSystem:
                            "missing": self.screen.missing, "notes": self.screen.notes},
                 "psd": None if self.psd is None else {"d50_um": math.exp(self.psd.mu) * 1e6, "sigma_ln": self.psd.sigma},
             },
-            "detector": {"tag": inp.detector.tag, "type": inp.detector.detector_type, "status": self.det["status"],
-                         "reading_g_s": None if self.det.get("reading_kg_s") is None else self.det["reading_kg_s"] * 1000,
-                         "true_g_s": None if self.det.get("true_kg_s") is None else self.det["true_kg_s"] * 1000,
-                         "alarm": self.det["alarm"], "alarm_threshold_g_s": inp.detector.alarm_threshold_g_s,
-                         "velocity_m_s": self.det.get("velocity_m_s"), "cumulative_measured_kg": self.cum["detector_meas_kg"],
-                         "uncertainty_pct": 2 * inp.detector.calibration_uncertainty_pct,
-                         "location": "choke outlet (downstream of PCV)"},
             "transport": self._transport_report(),
             "velocities": None if not r else {k: v for k, v in r["velocities"].items() if not isinstance(v, bool)} | {"critical_flow": r["velocities"]["critical"]},
             "erosion": None if not r else {
@@ -844,7 +809,7 @@ class SandChokeSystem:
                        + ("SIGNIFICANT" if cvt["significant"] else "not significant"))
         actions = {
             "Normal": ["continue monitoring sand and Cv tracking"],
-            "Elevated erosion risk": ["consider reducing drawdown / choke differential", "confirm sand rate with the detector or a sand trap"],
+            "Elevated erosion risk": ["consider reducing drawdown / choke differential", "confirm the sand rate with a sand trap or well-test sand sampling"],
             "Increased wear": ["schedule an inspection opportunity", "trend Cv tracking", "review vendor erosion limits"],
             "Inspection recommended": ["plan inspection of cage holes and plug", "review vendor limits and inspection evidence",
                                        "record the inspection to calibrate the model"],

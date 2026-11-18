@@ -1,11 +1,12 @@
 """XT workstation (reference layout 'Production 230XP22B'): schematic layout
-integrity, display aliases, calibration to the legible reference readings,
+integrity, plain engineering tags, calibration to the legible reference readings,
 control hydraulics (selector valves / fail-safe) and the additional methanol
 injection routes."""
 
 from __future__ import annotations
 
 import math
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,16 +72,14 @@ def test_every_layout_model_reference_resolves(scenario, layout):
 
 def test_every_valve_and_reference_transmitter_is_on_the_schematic(scenario, layout):
     """Each restriction / check valve of the tree is independently drawn and
-    every aliased (reference) transmitter appears in a panel."""
+    every main transmitter appears in a panel."""
     on_sheet = {r.split(":", 1)[1] for c in layout.components for r in [c.model, *c.models] if r}
     e = _engine(scenario)
     for el in e.dyn.elements.values():  # type: ignore[union-attr]
         if el.kind in ("valve", "choke", "check_valve"):
             assert el.id in on_sheet, f"valve {el.id} missing from the schematic"
-    inst_tags = {i.tag for i in e.instruments}
-    for eng, a in scenario.tag_aliases.items():
-        if eng in inst_tags and a.status != "addition":
-            assert eng in on_sheet, f"reference transmitter {a.tag} ({eng}) missing"
+    for tag in ("PT-101", "PT-102", "PT-103", "PT-104", "PT-106", "PT-107", "PT-201", "PDT-101", "FT-101"):
+        assert tag in on_sheet, f"transmitter {tag} missing"
     ids = [c.id for c in layout.components]
     assert len(ids) == len(set(ids)), "component ids must be unique"
 
@@ -98,14 +97,14 @@ def test_reference_positions_are_preserved(layout):
     expect = {  # photo pixels (keystone-straightened), tolerance 1.5 px
         "PMV": (233, 279), "SCSSV": (233, 326), "AMV": (202, 279), "AWV": (165, 139), "XOV": (171, 196),
         "SLV": (82, 196), "PWV": (441, 145), "CHOKE": (481, 145), "CIV302": (315, 176), "MIV302": (370, 265),
-        "MIV303": (370, 290), "CIV304": (130, 356), "SEL-LP-A": (468, 326), "SEL-HP-B": (468, 433),
+        "MIV303": (370, 290), "CIV304": (130, 356), "HSV-101": (468, 326), "HSV-104": (468, 433),
     }
     for cid, (px, py) in expect.items():
         x, y = photo(cid)
         assert abs(x - px) < 1.5 and abs(y - py) < 1.5, (cid, x, y)
     # broad grouping: annulus left of the bore, chemicals right of it, choke furthest right, selectors bottom right
     assert by["AMV"].x < by["PMV"].x < by["CIV302"].x < by["PWV"].x < by["CHOKE"].x
-    assert by["SEL-LP-A"].y > by["PWV"].y and by["SEL-LP-A"].x > by["PMV"].x
+    assert by["HSV-101"].y > by["PWV"].y and by["HSV-101"].x > by["PMV"].x
     assert by["SLV"].x < by["XOV"].x < by["PMV"].x
 
 
@@ -141,7 +140,7 @@ def test_lines_are_connected(layout):
 def test_components_sit_on_their_flow_path(layout):
     lines = {ln.id: ln for ln in layout.lines}
     for c in layout.components:
-        if not c.flow_path or c.type in ("tag_panel", "choke_panel", "sand_detector", "header_panel"):
+        if not c.flow_path or c.type in ("tag_panel", "choke_panel", "header_panel"):
             continue
         ln = lines[c.flow_path]
         d = min(
@@ -183,60 +182,24 @@ def test_layout_positions_do_not_affect_measurement_location(scenario, monkeypat
     assert {k: r.value for k, r in e1.readings.items()} == {k: r.value for k, r in e2.readings.items()}
 
 
-# ------------------------------------------------------------------ aliases
-def test_display_aliases_cover_the_confidently_read_reference_tags(scenario):
-    shown = {a.tag: a.status for a in scenario.tag_aliases.values()}
-    for tag in ["AWV3034", "AMV3030", "PMV3004", "PWV3005", "SCSSV3003", "PCV3006", "XOV3032", "SLV3035",
-                "PT3002", "PT3003", "PT3004", "PT3005", "PT3008", "PT3009", "PT3014", "PT3030", "PD3014"]:
-        assert shown.get(tag) == "verified", tag
-    tags = [a.tag for a in scenario.tag_aliases.values()]
-    assert len(tags) == len(set(tags)), "display tags must be unique"
-    # aliases refer to real engineering tags
+# ------------------------------------------------------------------ tags
+TAG = re.compile(r"^[A-Z]{2,5}-\d{3}$")
+
+
+def test_plain_engineering_tags_without_display_aliases(scenario, layout):
+    """Every valve, transmitter, selector and panel uses one plain tag
+    (PMV-101, PT-104, HSV-101 ...): no reference-photo aliases."""
+    assert scenario.tag_aliases == {}
     e = _engine(scenario)
-    known = set(e.restrictions) | {i.tag for i in e.instruments} | {s.tag for s in scenario.control_hydraulics.selector_valves} \
-        | {h.tag for h in scenario.control_hydraulics.headers} | {s.tag for s in scenario.control_hydraulics.supplies}
-    assert set(scenario.tag_aliases) <= known
-
-
-# ------------------------------------------- readings are the model's own
-def test_readings_are_calculated_not_copied_from_the_reference(scenario):
-    """The photograph defines the architecture only: transmitter values come
-    from the engineering inputs and follow them."""
-    e = _engine(scenario)
-    p_cav = _val(e, "PT-104")
-    # consistent with the steady hydraulic solution of the configured system
-    assert p_cav == pytest.approx(e.hyd.node_pressure["N_PMV_PWV"], rel=1e-3)
-    # the two transmitters on the same volume agree, the differential equals the pressure difference
-    assert _val(e, "PT-107") == pytest.approx(p_cav, abs=0.05e5)
-    assert _val(e, "PDT-401") == pytest.approx(_val(e, "PT-404") - _val(e, "PT-403"), abs=0.1e5)
-    # a different reservoir input gives different readings
-    e2 = _engine(scenario)
-    e2.set_boundary(reservoir_pressure_pa=u.bara_to_pa(330))
-    e2.recompute()
-    assert e2.hyd.node_pressure["N_PMV_PWV"] < p_cav - 2e5
-
-
-def test_valve_operations_drive_the_transmitters(scenario):
-    e = _engine(scenario)
-    e.start()
-    e.advance(60)
-    cav0, dn0 = _val(e, "PT-104"), _val(e, "PT-103")
-    e.command_valve("PWV-101", "close")
-    e.advance(900)
-    cav1, dn1 = _val(e, "PT-104"), _val(e, "PT-103")
-    assert cav1 > cav0 + 10e5  # tree cavity builds toward shut-in pressure
-    assert dn1 < dn0 - 1e5  # choke outlet falls toward flowline pressure
-    # choke throttling changes the operating point
-    e.command_valve("PWV-101", "open")
-    e.advance(600)
-    e.command_valve("CHK-101", "set_position", 80)
-    e.advance(900)
-    assert _val(e, "PT-104") < cav0  # more open choke -> lower tree pressure, higher rate
-    # opening the crossover connects the annulus service-line junction to the tree cavity
-    e.command_valve("XOV-101", "open")
-    e.command_valve("SLV-101", "close")
-    e.advance(300)
-    assert _val(e, "PT-404") == pytest.approx(_val(e, "PT-104"), abs=2e5)
+    hyd = scenario.control_hydraulics
+    tags = [*e.restrictions, *(i.tag for i in e.instruments), *(s.tag for s in hyd.selector_valves),
+            *(h.tag for h in hyd.headers), *(s.tag for s in hyd.supplies)]
+    bad = [t for t in tags if not TAG.match(t)]
+    assert not bad, bad
+    assert len(tags) == len(set(tags)), "tags must be unique"
+    panels = [c.id for c in layout.components if c.type in ("tag_panel", "header_panel")]
+    assert all(TAG.match(t) for t in panels), panels
+    assert not any(c.type == "sand_detector" or "3001" in c.id for c in layout.components)
 
 
 # ------------------------------------------------------- control hydraulics
@@ -247,8 +210,8 @@ def test_loss_of_lp_supply_closes_fail_safe_valves_and_blocks_opening(scenario):
     e.command_valve("AMV-101", "open")
     e.command_valve("CIV-302", "open")
     e.advance(60)
-    e.command_selector("SEL-LP-A", "close")
-    e.command_selector("SEL-LP-B", "close")
+    e.command_selector("HSV-101", "close")
+    e.command_selector("HSV-102", "close")
     e.advance(60)
     assert e.restrictions["PMV-101"].actuator.position_pct == 100  # headers still above minimum
     e.advance(1200)
@@ -263,7 +226,7 @@ def test_loss_of_lp_supply_closes_fail_safe_valves_and_blocks_opening(scenario):
         e.command_valve("PWV-101", "open")
     e.command_valve("PWV-101", "close")  # closing is always possible
     # one selector valve restores the supply (SCM A/B redundancy)
-    e.command_selector("SEL-LP-B", "open")
+    e.command_selector("HSV-102", "open")
     e.advance(120)
     assert hyd.supply_ok("LP")
     e.command_valve("PMV-101", "open")
@@ -272,7 +235,7 @@ def test_loss_of_lp_supply_closes_fail_safe_valves_and_blocks_opening(scenario):
 def test_single_selector_valve_keeps_the_supply_redundant(scenario):
     e = _engine(scenario)
     e.start()
-    e.command_selector("SEL-HP-A", "close")
+    e.command_selector("HSV-103", "close")
     e.advance(3600)
     assert e.ctrl.supply_ok("HP")
     assert e.restrictions["SCSSV-101"].actuator.position_pct == 100
@@ -317,22 +280,22 @@ def test_miv_routes_inject_into_their_own_nodes_and_conserve_volume(scenario):
 
 
 # ---------------------------------------------------------------------- API
-def test_api_accepts_display_tags_and_exposes_layout_and_hydraulics():
+def test_api_accepts_plain_tags_and_exposes_layout_and_hydraulics():
     with TestClient(app) as client:
         r = client.post("/api/sessions", json={"scenario_id": SCN})
         assert r.status_code == 201
         body = r.json()
         sid, st = body["session_id"], body["state"]
         assert st["schematic"]["id"] == SCN
-        assert st["tag_aliases"]["PMV-101"]["tag"] == "PMV3004"
-        assert {h["tag"] for h in st["control_hydraulics"]["headers"]} == {"PT-HYD-LPA", "PT-HYD-LPB", "PT-HYD-HPA", "PT-HYD-HPB"}
-        r = client.post(f"/api/sessions/{sid}/valves/PWV3005", json={"command": "close"})
+        assert st["tag_aliases"] == {}
+        assert {h["tag"] for h in st["control_hydraulics"]["headers"]} == {"PT-611", "PT-612", "PT-621", "PT-622"}
+        r = client.post(f"/api/sessions/{sid}/valves/PWV-101", json={"command": "close"})
         assert r.status_code == 200
         pwv = next(x for x in r.json()["state"]["elements"] if x.get("tag") == "PWV-101")
         assert pwv["commanded_pct"] == 0
-        r = client.post(f"/api/sessions/{sid}/hydraulics/selectors/SEL-LP-A", json={"command": "close"})
+        r = client.post(f"/api/sessions/{sid}/hydraulics/selectors/HSV-101", json={"command": "close"})
         assert r.status_code == 200
-        sel = next(x for x in r.json()["state"]["control_hydraulics"]["selector_valves"] if x["tag"] == "SEL-LP-A")
+        sel = next(x for x in r.json()["state"]["control_hydraulics"]["selector_valves"] if x["tag"] == "HSV-101")
         assert sel["commanded_pct"] == 0
         assert client.post(f"/api/sessions/{sid}/hydraulics/selectors/NOPE", json={"command": "close"}).status_code == 404
         assert client.post(f"/api/sessions/{sid}/hydraulics/supplies/LP", json={"available": False}).status_code == 200

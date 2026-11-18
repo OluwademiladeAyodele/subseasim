@@ -1,6 +1,7 @@
 /**
  * Choke health & erosion: wear per criterion against the site allowances,
- * remaining life (P10 / P50 / P90) in days, sand and liquid produced,
+ * remaining life (P10 / P50 / P90) in days, the sand source (onset and
+ * rates to the choke), sand and liquid produced,
  * measured Cv tracking, calibration from inspections, confidence and a
  * reasoned recommendation. All values from the backend erosion model.
  */
@@ -13,7 +14,7 @@ import { Badge, Button, Input, Panel, Stat } from "@/components/ui/primitives";
 import { fmt } from "@/lib/units";
 import type { SandChokeResults, WearCriterion } from "@/types/sand";
 
-import { Unavailable } from "./SandPage";
+import { SandSourcePanel, Unavailable } from "./SandSource";
 
 export const HEALTH_TONE: Record<string, "ok" | "info" | "warn" | "bad" | "fault" | "neutral"> = {
   Normal: "ok",
@@ -54,7 +55,7 @@ function Chart({ xs, ys, xl, yl, limit }: { xs: number[]; ys: number[]; xl: stri
 }
 
 export function ChokeHealthPage() {
-  const { state, actions, go } = useWorkstation();
+  const { state, sim, actions, go } = useWorkstation();
   const r = state.sand_choke as SandChokeResults | null | undefined;
   const [days, setDays] = useState("90");
   const [xAxis, setXAxis] = useState<"days" | "sand" | "liquid">("days");
@@ -106,6 +107,8 @@ export function ChokeHealthPage() {
           </ul>
           <p className="mt-2 text-[12px] text-dim">P10–P90 life range = central estimate ÷/× exp(1.28 σ). Inspections narrow the erosion-model term; a measured sand rate narrows the sand term.</p>
         </Panel>
+
+        <SandSourcePanel r={r} samples={sim.samples as unknown as Record<string, number | null>[]} onInputs={() => go("sandinputs")} />
 
         <Panel title="Wear against allowances" icon={<Gauge size={16} />} className="xl:col-span-3" bodyClassName="overflow-x-auto">
           <table className="w-full min-w-[980px] text-[12.5px]" data-testid="criteria-table">

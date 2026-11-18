@@ -51,15 +51,17 @@ describe("Choke health page", () => {
   });
 });
 
-describe("Sand monitoring page", () => {
-  it("shows onset, sand rates along the path and the detector", async () => {
+describe("Sand source on the choke health page", () => {
+  it("shows the onset and the sand rates from the formation to the choke", async () => {
     current = base();
-    const { SandPage } = await import("@/pages/SandPage");
-    render(<SandPage />);
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
     const s = current.sand_choke!.sand!;
+    expect(screen.getByTestId("sand-source")).toBeInTheDocument();
     expect(screen.getByTestId("risk-index")).toHaveTextContent(fmt(s.onset!.risk_index, 2));
     expect(screen.getByTestId("sand-produced")).toHaveTextContent(fmt(s.produced_kg_d, 2));
-    expect(screen.getByTestId("detector-status")).toBeInTheDocument();
+    expect(screen.getByTestId("sand-choke")).toHaveTextContent(fmt(s.at_choke_kg_d, 2));
+    expect(screen.queryByText(/detector/i)).toBeNull();
   });
 });
 
@@ -80,14 +82,11 @@ describe("Sand & choke inputs page", () => {
   });
 });
 
-describe("XT3001 on the schematic", () => {
-  it("shows the live detector reading and opens sand monitoring", async () => {
+describe("Tree workstation without a sand detector", () => {
+  it("draws no sand detector on the schematic", () => {
     const s = base();
-    const onNavigate = vi.fn();
-    render(<XtSchematic state={s} schematic={s.schematic!} selection={null} onSelect={() => {}} onNavigate={onNavigate} prefs={prefs} />);
-    const det = s.sand_choke!.detector!;
-    expect(screen.getByTestId("panel-XT3001")).toHaveTextContent(det.reading_g_s == null ? "" : fmt(det.reading_g_s, 3));
-    await userEvent.click(screen.getByTestId("sand-detector"));
-    expect(onNavigate).toHaveBeenCalledWith("sand");
+    render(<XtSchematic state={s} schematic={s.schematic!} selection={null} onSelect={() => {}} onNavigate={() => {}} prefs={prefs} />);
+    expect(screen.queryByTestId("sand-detector")).toBeNull();
+    expect(screen.queryByTestId("panel-XT3001")).toBeNull();
   });
 });

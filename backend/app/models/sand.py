@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Pos = Annotated[float, Field(gt=0)]
 NonNeg = Annotated[float, Field(ge=0)]
@@ -84,19 +84,6 @@ class SandInputs(_S):
     #: twice the critical drawdown [kg/m3]. MUST be calibrated (sand-trap / detector data).
     rate_coefficient_kg_m3: NonNeg | None = None
     rate_exponent: Pos = 1.5
-
-
-class DetectorInputs(_S):
-    tag: str = "XT3001"
-    detector_type: Literal["acoustic_non_intrusive", "intrusive_erosion_probe"] = "acoustic_non_intrusive"
-    #: Calibration factor uncertainty (1 sigma) [%].
-    calibration_uncertainty_pct: NonNeg = 25.0
-    #: Mixture velocity below which an acoustic detector cannot detect sand [m/s].
-    min_velocity_m_s: NonNeg = 1.0
-    #: Background (flow-noise) equivalent sand rate [g/s].
-    noise_floor_g_s: NonNeg = 0.005
-    alarm_threshold_g_s: Pos = 0.1
-    range_max_g_s: Pos = 50.0
 
 
 class HoleRow(_S):
@@ -198,7 +185,6 @@ class SandChokeInputs(_S):
     geomechanics: GeomechanicsInputs = Field(default_factory=GeomechanicsInputs)
     completion: CompletionInputs = Field(default_factory=CompletionInputs)
     sand: SandInputs = Field(default_factory=SandInputs)
-    detector: DetectorInputs = Field(default_factory=DetectorInputs)
     choke: ChokeTrimInputs = Field(default_factory=ChokeTrimInputs)
     custom_materials: list[CustomMaterial] = Field(default_factory=list)
     acceptance: AcceptanceCriteria = Field(default_factory=AcceptanceCriteria)
@@ -207,3 +193,11 @@ class SandChokeInputs(_S):
     inspections: list[InspectionRecord] = Field(default_factory=list)
     #: Trim service time already accumulated before the simulation starts [days].
     initial_service_days: NonNeg = 0.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data):
+        # saves made before the sand detector was retired still carry its block
+        if isinstance(data, dict) and "detector" in data:
+            data = {k: v for k, v in data.items() if k != "detector"}
+        return data

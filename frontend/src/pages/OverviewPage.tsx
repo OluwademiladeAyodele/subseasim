@@ -96,8 +96,8 @@ function ValveStatus() {
 export function OverviewPage() {
   const { state, layout, selection, select, prefs, sim, selectTag, go } = useWorkstation();
   const dynamic = state.mode === "dynamic";
-  const [view, setView] = useState<"xt" | "system">("xt");
-  const xt = !!state.schematic && view === "xt";
+  // the tree workstation is the main view; scenarios without one fall back to the generic tree
+  const xt = !!state.schematic;
   return (
     <PageBody>
       <KeyMeasurements state={state} prefs={prefs} onSelect={selectTag} />
@@ -110,16 +110,6 @@ export function OverviewPage() {
         }
         right={
           <div className="flex items-center gap-2">
-            {state.schematic && (
-              <div className="flex overflow-hidden rounded-md border border-line text-[12px]" role="tablist" aria-label="Schematic view">
-                {([["xt", "Tree workstation"], ["system", "Full system"]] as const).map(([k, l]) => (
-                  <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
-                    className={view === k ? "bg-accent px-2.5 py-1 font-semibold text-white" : "px-2.5 py-1 text-muted hover:bg-panel-2"}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            )}
             <Badge tone={dynamic ? "accent" : "neutral"}>{dynamic ? "Dynamic model" : "Steady model"}</Badge>
             <Badge tone="warn">{state.scenario.data_classification}</Badge>
           </div>

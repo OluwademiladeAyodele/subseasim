@@ -199,7 +199,6 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
     const tags = c.models.map((m) => ref(m)[1]);
     const rows = tags.map((t) => instByTag.get(t)).filter(Boolean) as InstrumentSnapshot[];
     const row = c.h < 45; // single-row panel (tag | value), as PD3014 on the reference
-    const alias = rows[0] ? aliasOf(state, rows[0].tag) : null;
     const anySel = rows.some((r) => r.tag === selInst);
     const H_HEAD = row ? c.h : 15;
     const H_ROW = rows.length ? (c.h - (row ? 0 : H_HEAD)) / (row ? 1 : rows.length) : 0;
@@ -207,7 +206,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
       <g key={c.id} data-testid={`panel-${c.id}`}>
         {c.tap && <TapLeader c={c} />}
         <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={XT.panel} stroke={anySel ? COLORS.accent : "#94a3b8"} strokeWidth={anySel ? 2 : 0.9}
-          strokeDasharray={alias?.status === "addition" || !alias ? "3 2" : undefined} filter="url(#xtsoft)" />
+          filter="url(#xtsoft)" />
         {!row && <rect x={c.x} y={c.y} width={c.w} height={H_HEAD} rx={2} fill={XT.panelHead} />}
         <text x={c.x + 5} y={c.y + (row ? c.h / 2 + 3.5 : 11)} fontSize={10} fontWeight={700} fill={XT.ink} pointerEvents="none">
           {c.id}
@@ -248,7 +247,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
   };
 
   const component = (c: SchComponent) => {
-    const [kind, id] = ref(c.model);
+    const [, id] = ref(c.model);
     switch (c.type) {
       case "tag_panel":
         return instPanel(c);
@@ -276,35 +275,14 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
           </Clickable>
         );
       }
-      case "sand_detector": {
-        const det = state.sand_choke?.available ? state.sand_choke.detector : undefined;
-        const alarm = !!det?.alarm;
-        const txt = !det ? "three-phase model off" : det.reading_g_s == null ? det.status.toLowerCase().replace(/_/g, " ") : `${fmt(det.reading_g_s, 3)} g/s`;
-        return (
-          <g key={c.id} data-testid={`panel-${c.id}`}>
-            {c.tap && <TapLeader c={c} />}
-            <Clickable id={c.id} label={`${c.id} sand detector`} selected={false} testid="sand-detector" onClick={() => onNavigate("sand")}>
-              <title>{det ? `${det.tag}: ${det.type.replace(/_/g, " ")} - click for sand monitoring` : c.note}</title>
-              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={alarm ? "#fee2e2" : XT.panel} stroke={alarm ? XT.closed : "#94a3b8"} strokeWidth={alarm ? 1.6 : 0.9}
-                strokeDasharray={det ? undefined : "1.5 1.5"} />
-              <text x={c.x + 5} y={c.y + c.h / 2 + 3.5} fontSize={10} fontWeight={700} fill={XT.ink}>{c.id}</text>
-              <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 3.5} textAnchor="end" fontSize={9.5} className="num" fill={alarm ? XT.closed : det ? XT.ink : COLORS.static}>
-                {txt}
-              </text>
-            </Clickable>
-          </g>
-        );
-      }
       case "header_panel": {
         const hp = hydPressure(c.model);
-        const engTag = kind === "header" ? hyd?.headers.find((h) => h.id === id)?.tag : hyd?.supplies.find((s) => s.id === id)?.tag;
         const sel = selHyd === id;
         return (
           <g key={c.id} data-testid={`panel-${c.id}`}>
             {c.tap && <TapLeader c={c} />}
             <Clickable id={c.id} label={`${c.id} hydraulic pressure`} selected={sel} testid={`hyd-${id}`} onClick={() => onSelect({ type: "hydraulic", id })}>
-              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={sel ? SCH.selected : XT.panel} stroke={sel ? COLORS.accent : hp && !hp.ok ? XT.closed : "#94a3b8"} strokeWidth={sel ? 2 : 0.9}
-                strokeDasharray={engTag && aliasOf(state, engTag)?.status !== "verified" ? "1.5 1.5" : undefined} />
+              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={sel ? SCH.selected : XT.panel} stroke={sel ? COLORS.accent : hp && !hp.ok ? XT.closed : "#94a3b8"} strokeWidth={sel ? 2 : 0.9} />
               <text x={c.x + 4} y={c.y + 10} fontSize={8.5} fontWeight={700} fill={XT.ink}>{c.id}</text>
               <text x={c.x + c.w - 4} y={c.y + c.h - 4} textAnchor="end" fontSize={10} className="num" fill={hp && !hp.ok ? XT.closed : XT.ink}>
                 {hp ? fmt(pressureFromPa(hp.p, prefs.pressureRef), 1) : "—"} <tspan fontSize={8} fill={COLORS.muted}>{prefs.pressureRef}</tspan>
@@ -378,7 +356,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
         const sel = selEl === id;
         return (
           <Clickable key={c.id} id={c.id} label={`${v.tag} ${v.name}`} selected={sel} testid={`check-${v.tag}`} onClick={() => onSelect({ type: "element", id })}>
-            <title>{`${v.tag} - SubseaSim addition (not drawn on the reference page)`}</title>
+            <title>{`${v.tag} ${v.name}`}</title>
             <rect x={c.x - 9} y={c.y - 9} width={18} height={18} fill="transparent" />
             {sel && <rect x={c.x - 9} y={c.y - 9} width={18} height={18} fill="none" stroke={COLORS.accent} strokeDasharray="3 2" />}
             <g transform={`translate(${c.x} ${c.y}) rotate(${c.rotation})`}>
@@ -478,7 +456,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
         {/* groups */}
         {L.groups.map((g) => (
           <g key={g.id} pointerEvents="none">
-            {g.frame && <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={4} fill={g.id === "additions" ? "#f8fafc" : "none"} stroke="#94a3b8" strokeWidth={1} strokeDasharray={g.id === "additions" ? "6 4" : undefined} />}
+            {g.frame && <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={4} fill={g.id === "additions" ? "#f8fafc" : "none"} stroke="#94a3b8" strokeWidth={1} />}
             <text x={g.x + 6} y={g.y + (g.frame ? 14 : -4)} fontSize={g.frame ? 10.5 : 9} fontWeight={600} fill={g.frame ? XT.ink : "#94a3b8"} letterSpacing={g.frame ? 0 : 1}>
               {g.frame ? g.label : g.label.toUpperCase()}
             </text>
@@ -582,7 +560,7 @@ function Legend({ x, y, chems }: { x: number; y: number; chems: { id: string; na
   const lines: [string, string][] = [["Production", XT.line.production], ["Annulus / service", XT.line.annulus], ["Chemical (idle)", XT.line.chemical], ["Control hydraulics", XT.line.hydraulic]];
   return (
     <g transform={`translate(${x} ${y})`} pointerEvents="none" data-testid="xt-legend">
-      <rect width={228} height={168} rx={4} fill={XT.panel} fillOpacity={0.97} stroke="#cbd5e1" filter="url(#xtsoft)" />
+      <rect width={228} height={150} rx={4} fill={XT.panel} fillOpacity={0.97} stroke="#cbd5e1" filter="url(#xtsoft)" />
       <text x={10} y={15} fontSize={9.5} fontWeight={700} fill={XT.ink}>LEGEND (reference HMI colours)</text>
       {valves.map(([l, c, solid], i) => (
         <g key={l} transform={`translate(${16 + (i % 2) * 104} ${32 + Math.floor(i / 2) * 16})`}>
@@ -612,13 +590,7 @@ function Legend({ x, y, chems }: { x: number; y: number; chems: { id: string; na
           </g>
         ))}
       </g>
-      <g transform="translate(10 140)">
-        <rect x={0} y={-6} width={20} height={11} rx={2} fill="none" stroke="#94a3b8" strokeDasharray="1.5 1.5" />
-        <text x={25} y={3} fontSize={8.5} fill={XT.ink}>tag uncertain</text>
-        <rect x={100} y={-6} width={20} height={11} rx={2} fill="none" stroke="#94a3b8" strokeDasharray="3 2" />
-        <text x={125} y={3} fontSize={8.5} fill={XT.ink}>SubseaSim addition</text>
-      </g>
-      <text x={10} y={160} fontSize={8} fill={COLORS.muted}>Arrangement traced from the reference page; values simulated.</text>
+      <text x={10} y={142} fontSize={8} fill={COLORS.muted}>Values simulated from the model inputs.</text>
     </g>
   );
 }

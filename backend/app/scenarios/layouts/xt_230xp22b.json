@@ -13,10 +13,9 @@
     ],
     "scale": 2.6,
     "notes": [
-      "Tags PT3010, PT3011 and PT3013 (listed in the requirement) could not be located on the photograph and are not assigned.",
       "The SCM Reconnect button on the reference is not reproduced: SCM communications are not modelled.",
       "Chemical names at the right-hand line ends are illegible on the photograph; SubseaSim chemical names are shown.",
-      "The framed region right of photo x = 550 (manifold, additional transmitters) is a SubseaSim addition outside the reference page."
+      "The framed region right of photo x = 550 (manifold, additional transmitters) holds measurements added beyond the reference page."
     ]
   },
   "groups": [
@@ -76,7 +75,7 @@
     },
     {
       "id": "additions",
-      "label": "SubseaSim additions - not on the reference page",
+      "label": "Additional measurements",
       "x": 1378.0,
       "y": 130.0,
       "w": 265.2,
@@ -1123,7 +1122,7 @@
       "flow_path": "chem-downhole"
     },
     {
-      "id": "PTT3005",
+      "id": "PTT-104",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1143,7 +1142,7 @@
       "group": "tree"
     },
     {
-      "id": "PTT3004",
+      "id": "PTT-107",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1163,7 +1162,7 @@
       "group": "tree"
     },
     {
-      "id": "PT3014",
+      "id": "PT-404",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1182,7 +1181,7 @@
       "group": "annulus"
     },
     {
-      "id": "PD3014",
+      "id": "PDT-401",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1197,7 +1196,7 @@
       "note": "Differential across SLV (assumed)."
     },
     {
-      "id": "PT3030",
+      "id": "PT-402",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1216,7 +1215,7 @@
       "group": "annulus"
     },
     {
-      "id": "PT3031",
+      "id": "PT-401",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1236,7 +1235,7 @@
       "note": "Drawn above AMV as on the reference; measures the A-annulus below AMV."
     },
     {
-      "id": "PTT3002",
+      "id": "PTT-001",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1256,7 +1255,7 @@
       "group": "downhole"
     },
     {
-      "id": "PTT3003",
+      "id": "PTT-002",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1271,7 +1270,7 @@
       "group": "downhole"
     },
     {
-      "id": "PTT3008",
+      "id": "PTT-103",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1291,7 +1290,7 @@
       "group": "downstream"
     },
     {
-      "id": "PTT3009",
+      "id": "PTT-106",
       "type": "tag_panel",
       "model": null,
       "models": [
@@ -1311,7 +1310,7 @@
       "group": "downstream"
     },
     {
-      "id": "PCV3006-panel",
+      "id": "CHK-101-panel",
       "type": "choke_panel",
       "model": "element:CHOKE",
       "x": 1237.6,
@@ -1322,70 +1321,43 @@
       "group": "downstream"
     },
     {
-      "id": "XT3001",
-      "type": "sand_detector",
-      "model": null,
-      "x": 1222.0,
-      "y": 351.0,
-      "w": 122.2,
-      "h": 52.0,
-      "rotation": 0,
-      "tap": [
-        1198.6,
-        374.4
-      ],
-      "flow_path": "choke-outlet",
-      "group": "downstream",
-      "note": "XT3001 on the reference (assumed acoustic sand detector on the choke outlet); reading from the sand-detector model."
-    },
-    {
-      "id": "XT3001-body",
-      "type": "inline_device",
-      "model": null,
-      "x": 1198.6,
-      "y": 416.0,
-      "rotation": 90,
-      "flow_path": "choke-outlet",
-      "note": "Inline device on the choke outlet (reference). Associated with XT3001."
-    },
-    {
-      "id": "SEL-LP-A",
+      "id": "HSV-101",
       "type": "selector_valve",
-      "model": "selector:SEL-LP-A",
+      "model": "selector:HSV-101",
       "x": 1164.8,
       "y": 743.6,
       "rotation": 0,
       "flow_path": "hyd-lp-a"
     },
     {
-      "id": "SEL-LP-B",
+      "id": "HSV-102",
       "type": "selector_valve",
-      "model": "selector:SEL-LP-B",
+      "model": "selector:HSV-102",
       "x": 1164.8,
       "y": 842.4,
       "rotation": 0,
       "flow_path": "hyd-lp-b"
     },
     {
-      "id": "SEL-HP-A",
+      "id": "HSV-103",
       "type": "selector_valve",
-      "model": "selector:SEL-HP-A",
+      "model": "selector:HSV-103",
       "x": 1164.8,
       "y": 928.2,
       "rotation": 0,
       "flow_path": "hyd-hp-a"
     },
     {
-      "id": "SEL-HP-B",
+      "id": "HSV-104",
       "type": "selector_valve",
-      "model": "selector:SEL-HP-B",
+      "model": "selector:HSV-104",
       "x": 1164.8,
       "y": 1021.8,
       "rotation": 0,
       "flow_path": "hyd-hp-b"
     },
     {
-      "id": "LPHP1",
+      "id": "PT-601",
       "type": "header_panel",
       "model": "supply:LP",
       "x": 1014.0,
@@ -1400,7 +1372,7 @@
       "group": "selector"
     },
     {
-      "id": "HPHP1",
+      "id": "PT-602",
       "type": "header_panel",
       "model": "supply:HP",
       "x": 1014.0,
@@ -1415,7 +1387,7 @@
       "group": "selector"
     },
     {
-      "id": "LP3096",
+      "id": "PT-611",
       "type": "header_panel",
       "model": "header:LP-A",
       "x": 1214.2,
@@ -1430,7 +1402,7 @@
       "group": "selector"
     },
     {
-      "id": "LP3097",
+      "id": "PT-612",
       "type": "header_panel",
       "model": "header:LP-B",
       "x": 1214.2,
@@ -1445,7 +1417,7 @@
       "group": "selector"
     },
     {
-      "id": "HP3098",
+      "id": "PT-621",
       "type": "header_panel",
       "model": "header:HP-A",
       "x": 1214.2,
@@ -1460,7 +1432,7 @@
       "group": "selector"
     },
     {
-      "id": "HP3099",
+      "id": "PT-622",
       "type": "header_panel",
       "model": "header:HP-B",
       "x": 1214.2,
@@ -1488,7 +1460,7 @@
       "h": 75.4,
       "rotation": 0,
       "group": "additions",
-      "note": "Upstream of the production choke (between PWV and PCV3006)."
+      "note": "Upstream of the production choke (between PWV and CHK-101)."
     },
     {
       "id": "PDT-101",

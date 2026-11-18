@@ -124,7 +124,7 @@ history. The model therefore uses a **calibrated empirical** form:
     ṁ_formation = k · Q_liquid,reservoir · (r − 1)ⁿ   (r > 1; 0 below onset)
     ṁ_produced  = f · ṁ_formation
 
-- k (kg/m³ at r = 2) must be calibrated from sand-trap, detector or well-test
+- k (kg/m³ at r = 2) must be calibrated from sand-trap or well-test sand
   data.
 - Without k the prediction is **unavailable**.
 - The predicted rate carries a factor-5 uncertainty (90 % range) in the

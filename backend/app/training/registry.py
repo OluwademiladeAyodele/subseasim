@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from app.training.exercises.ex03_choke import EXERCISE as EX03
+from app.training.exercises.ex07_integrated import EXERCISE as EX07
 from app.training.framework import ExerciseDefinition
 
-EXERCISES: dict[str, ExerciseDefinition] = {e.id: e for e in (EX03,)}
+EXERCISES: dict[str, ExerciseDefinition] = {e.id: e for e in (EX03, EX07)}
 
 
 def get_exercise(exercise_id: str) -> ExerciseDefinition:

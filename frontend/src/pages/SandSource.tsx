@@ -1,12 +1,10 @@
 /**
- * Sand monitoring: sanding onset (critical drawdown), sand rates from the
- * formation through the screens to the choke, the XT3001 detector, particle
+ * Sand source for the choke health page: sanding onset (critical drawdown),
+ * sand rates from the formation through the screens to the choke, particle
  * size and transport. All values from the backend sand model.
  */
-import { Activity, AlertTriangle, Mountain, Radar, Route } from "lucide-react";
+import { Activity, AlertTriangle, Mountain } from "lucide-react";
 
-import { useWorkstation } from "@/app/context";
-import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Panel, Stat } from "@/components/ui/primitives";
 import { fmt } from "@/lib/units";
 import type { SandChokeResults } from "@/types/sand";
@@ -61,24 +59,19 @@ function RiskBar({ index }: { index: number }) {
   );
 }
 
-export function SandPage() {
-  const { state, sim, go } = useWorkstation();
-  const r = state.sand_choke as SandChokeResults | null | undefined;
-  if (!r || !r.available || !r.sand) {
-    return <PageBody><Panel title="Sand monitoring"><p className="text-[13px] text-muted">{r?.reason ?? "No sand model in this scenario."}</p></Panel></PageBody>;
-  }
+export function SandSourcePanel({ r, samples, onInputs }: { r: SandChokeResults; samples: Record<string, number | null>[]; onInputs: () => void }) {
   const s = r.sand;
+  if (!s) return null;
   const on = s.onset;
-  const det = r.detector!;
-  const samples = sim.samples as unknown as Record<string, number | null>[];
-  const missing = s.missing;
   return (
-    <PageBody intro="Sand is followed from the formation, through the sand screens, up the well to the choke and on to the manifold. It moves only with the simulated flow.">
-      <div className="grid items-start gap-4 xl:grid-cols-3" data-testid="sand-page">
-        <Panel title="Sanding onset" icon={<Mountain size={16} />} subtitle="Critical drawdown, perforation-tunnel failure (TWC-based)"
-          right={on?.available ? <Badge tone={(on.risk_index ?? 0) > 1 ? "bad" : (on.risk_index ?? 0) > 0.8 ? "warn" : "ok"} data-testid="risk-badge">{(on.risk_index ?? 0) > 1 ? "SANDING" : "below onset"}</Badge> : undefined}>
+    <Panel title="Sand source" icon={<Mountain size={16} />} className="xl:col-span-3"
+      subtitle={`${s.mode === "measured" ? "Measured / configured sand rate" : "Predictive: critical drawdown (TWC) + calibrated empirical rate"} · drives the erosion below`}
+      right={on?.available ? <Badge tone={(on.risk_index ?? 0) > 1 ? "bad" : (on.risk_index ?? 0) > 0.8 ? "warn" : "ok"} data-testid="risk-badge">{(on.risk_index ?? 0) > 1 ? "SANDING" : "below onset"}</Badge> : undefined}>
+      <div className="grid gap-4 lg:grid-cols-3" data-testid="sand-source">
+        <div className="text-[13px]">
+          <h3 className="mb-1 t-eyebrow">Sanding onset</h3>
           {on?.available ? (
-            <div className="space-y-2 text-[13px]">
+            <div className="space-y-2">
               <div className="grid grid-cols-2 gap-3">
                 <Stat label="Drawdown" value={fmt(on.drawdown_bar, 1)} unit="bar" />
                 <Stat label="Critical drawdown" value={fmt(on.critical_drawdown_bar, 1)} unit="bar" />
@@ -88,11 +81,10 @@ export function SandPage() {
               <div className="num text-[12px] text-dim">σv {fmt(on.sigma_v_bar, 0)} bar · σh {fmt(on.sigma_h_bar, 0)} bar · effective strength {fmt(on.effective_strength_bar, 0)} bar · critical BHFP {fmt(on.critical_bhfp_bara, 1)} bara</div>
               {[...on.notes, ...on.assumed.map((a) => `ASSUMED: ${a}`)].map((n) => <p key={n} className={`text-[12px] ${n.startsWith("ASSUMED") ? "text-warn" : "text-dim"}`}>{n}</p>)}
             </div>
-          ) : <Unavailable items={on?.missing ?? []} onInputs={() => go("sandinputs")} />}
-        </Panel>
-
-        <Panel title="Sand rates" icon={<Activity size={16} />} subtitle={s.mode === "measured" ? "Measured / configured input" : "Predictive (calibrated empirical rate)"} className="xl:col-span-2">
-          {missing.length > 0 && <div className="mb-3"><Unavailable items={missing} onInputs={() => go("sandinputs")} /></div>}
+          ) : <Unavailable items={on?.missing ?? []} onInputs={onInputs} />}
+        </div>
+        <div className="lg:col-span-2">
+          {s.missing.length > 0 && <div className="mb-3"><Unavailable items={s.missing} onInputs={onInputs} /></div>}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat testId="sand-formation" label="Formation (sandface)" value={fmt(s.formation_kg_d, 2)} unit="kg/d" />
             <Stat testId="sand-produced" label="Through the screens" value={fmt(s.produced_kg_d, 2)} unit="kg/d" tone="accent" />
@@ -111,48 +103,19 @@ export function SandPage() {
               {s.psd && <p className="text-[12px] text-dim">Formation PSD log-normal fit: D50 {fmt(s.psd.d50_um, 0)} µm, σ(ln d) {fmt(s.psd.sigma_ln, 2)}</p>}
             </div>
             <div>
-              <h3 className="mb-1 t-eyebrow">Sand at the choke vs detector</h3>
-              <Trend samples={samples} keys={["sand:detector_g_s", "sand:choke_g_s"]} labels={[`${det.tag} reading`, "true sand at choke"]} unit="g/s" />
+              <h3 className="mb-1 flex items-center gap-1 t-eyebrow"><Activity size={12} />Sand arriving at the choke</h3>
+              <Trend samples={samples} keys={["sand:choke_g_s"]} labels={["sand at choke"]} unit="g/s" />
             </div>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4 text-[12.5px]">
-            <div>Cumulative at choke <span className="num font-semibold">{fmt(r.cumulative?.choke_kg, 1)} kg</span></div>
-            <div>Produced <span className="num font-semibold">{fmt(r.cumulative?.produced_kg, 1)} kg</span></div>
-            <div>Liquid produced <span className="num font-semibold">{fmt(r.cumulative?.liquid_sm3, 0)} Sm³</span></div>
-            <div>Trim service <span className="num font-semibold">{fmt(r.service_days, 1)} d</span></div>
-          </div>
-        </Panel>
-
-        <Panel title={`Sand detector ${det.tag}`} icon={<Radar size={16} />} subtitle={`${det.type.replace(/_/g, " ")} · ${det.location}`}
-          right={<Badge tone={det.alarm ? "bad" : det.status === "OK" || det.status === "BELOW_DETECTION" ? "ok" : "warn"} data-testid="detector-status">{det.alarm ? "ALARM" : det.status}</Badge>}>
-          <div className="grid grid-cols-2 gap-3">
-            <Stat testId="detector-reading" label="Reading" value={det.reading_g_s == null ? "—" : fmt(det.reading_g_s, 3)} unit="g/s" tone={det.alarm ? "bad" : "accent"}
-              sub={`≈ ${det.reading_g_s == null ? "—" : fmt(det.reading_g_s * 86.4, 2)} kg/d · ±${fmt(det.uncertainty_pct, 0)} % (k=2)`} />
-            <Stat label="True at detector" value={fmt(det.true_g_s, 3)} unit="g/s" sub={`alarm at ${det.alarm_threshold_g_s} g/s`} />
-          </div>
-          <p className="mt-2 text-[12px] text-dim">
-            Velocity at the detector {fmt(det.velocity_m_s, 2)} m/s. Acoustic detectors need flow velocity to hear the impacts and carry a calibration uncertainty; the reading is not the
-            true sand rate. Cumulative measured {fmt(det.cumulative_measured_kg, 2)} kg.
-          </p>
-        </Panel>
-
-        <Panel title="Sand transport" icon={<Route size={16} />} className="xl:col-span-2">
-          <p className="text-[12.5px] text-muted">{r.transport?.model}</p>
+          <p className="mt-2 text-[12.5px] text-muted">{r.transport?.model}</p>
           {!!r.transport?.deposition?.length && (
-            <>
-              <div className="mt-2 flex h-6 overflow-hidden rounded border border-line" title="flowline segments: red = liquid velocity below the sand transport velocity (deposition risk)">
-                {r.transport.deposition.map((x) => (
-                  <div key={x.segment} className="flex-1 border-r border-white/70" style={{ background: x.risk ? "#fecaca" : "#bbf7d0" }} />
-                ))}
-              </div>
-              <p className="mt-1 text-[12px] text-dim">
-                Flowline: {r.transport.deposition_risk_segments} of {r.transport.deposition.length} segments with deposition risk. {r.transport.deposition_note}
-              </p>
-            </>
+            <p className="mt-1 text-[12px] text-dim">
+              Flowline: {r.transport.deposition_risk_segments} of {r.transport.deposition.length} segments with deposition risk. {r.transport.deposition_note}
+            </p>
           )}
-          <p className="mt-2 flex items-start gap-1.5 text-[12px] text-dim"><AlertTriangle size={13} className="mt-0.5 shrink-0" />Sand concentration is carried with the production flow and stops when the flow stops.</p>
-        </Panel>
+          <p className="mt-1 flex items-start gap-1.5 text-[12px] text-dim"><AlertTriangle size={13} className="mt-0.5 shrink-0" />Sand is carried with the production flow: it reaches the choke after the transit time and stops when the flow stops.</p>
+        </div>
       </div>
-    </PageBody>
+    </Panel>
   );
 }
