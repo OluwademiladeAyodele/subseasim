@@ -9,9 +9,11 @@ import { Activity, Gauge, Lightbulb, ListChecks, ShieldAlert, Wrench } from "luc
 import { useState } from "react";
 
 import { useWorkstation } from "@/app/context";
+import { JobProgress } from "@/components/JobProgress";
 import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Input, Panel, Stat } from "@/components/ui/primitives";
 import { fmt } from "@/lib/units";
+import { type Job, jobActive } from "@/types/jobs";
 import type { SandChokeResults, WearCriterion } from "@/types/sand";
 
 import { CavitationPanel } from "./CavitationPanel";
@@ -60,6 +62,8 @@ export function ChokeHealthPage() {
   const { state, sim, actions, go } = useWorkstation();
   const r = state.sand_choke as SandChokeResults | null | undefined;
   const [days, setDays] = useState("90");
+  const [job, setJob] = useState<Job | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
   const [xAxis, setXAxis] = useState<"days" | "sand" | "liquid">("days");
   if (!r || !r.available || !r.health) {
     return <PageBody><Panel title="Choke health"><p className="text-[13px] text-muted">{r?.reason ?? "No choke erosion model in this scenario."}</p></Panel></PageBody>;
@@ -220,8 +224,21 @@ export function ChokeHealthPage() {
           <div className="mt-2 flex items-center gap-2">
             <Input aria-label="Fast-forward days" inputMode="decimal" value={days} onChange={(e) => setDays(e.target.value)} className="w-24" />
             <span className="text-[12.5px] text-dim">days</span>
-            <Button size="sm" variant="primary" disabled={!(daysNum > 0 && daysNum <= 3650)} onClick={() => actions.sandFastForward(daysNum)} data-testid="fast-forward">Fast-forward</Button>
+            <Button size="sm" variant="primary" disabled={!(daysNum > 0 && daysNum <= 3650) || jobActive(job)} data-testid="fast-forward"
+              onClick={async () => {
+                const j = await actions.startJob("sand_fast_forward", { days: daysNum });
+                if (typeof j === "string") setJobError(j);
+                else {
+                  setJobError(null);
+                  setJob(j);
+                }
+              }}>
+              Fast-forward
+            </Button>
           </div>
+          {jobError && <p className="mt-1 text-[12px] text-bad" data-testid="job-error">{jobError}</p>}
+          {job && <JobProgress job={job} />}
+          <p className="mt-1 text-[11.5px] text-dim">Runs as a background job: the simulation stays responsive and you can cancel; days already integrated are kept.</p>
           <h3 className="mb-1 mt-3 t-eyebrow">Model limitations</h3>
           <ul className="list-disc space-y-0.5 pl-5 text-[12px] text-dim">{r.limitations?.map((x) => <li key={x}>{x}</li>)}</ul>
         </Panel>

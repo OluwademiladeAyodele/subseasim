@@ -11,7 +11,14 @@ import sandFixture from "./test/fixtures/sand_state.json";
 // Real snapshot (illustrative inputs, well producing sand, 60 days of trim wear) from the backend.
 const base = () => structuredClone(sandFixture) as unknown as SimulationState;
 const prefs = { pressureRef: "bara" as const, flowUnit: "m3/d" as const };
-const actions = { sandInputs: vi.fn().mockResolvedValue(true), sandExample: vi.fn().mockResolvedValue(true), sandFastForward: vi.fn().mockResolvedValue(true) };
+const job = (state: string, progress: number, message: string) => ({ id: "j1", session_id: "s", kind: "sand_fast_forward", label: "Fast-forward choke wear 90 days",
+  params: { days: 90 }, state, progress, message, created_at: "", started_at: "", finished_at: null, result: null, error: null, wall_s: 0.4 });
+const actions = {
+  sandInputs: vi.fn().mockResolvedValue(true), sandExample: vi.fn().mockResolvedValue(true), sandFastForward: vi.fn().mockResolvedValue(true),
+  startJob: vi.fn().mockResolvedValue(job("running", 0.2, "18 of 90 days")),
+  jobStatus: vi.fn().mockResolvedValue(job("completed", 1, "fast-forwarded 90 days")),
+  cancelJob: vi.fn().mockResolvedValue(job("cancelled", 0.3, "cancelled by the user at 30 %")),
+};
 const go = vi.fn();
 let current = base();
 vi.mock("@/app/context", () => ({ useWorkstation: () => ({ state: current, actions, prefs, go, sim: { samples: [] } }) }));
@@ -36,7 +43,11 @@ describe("Choke health page", () => {
     const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
     render(<ChokeHealthPage />);
     await userEvent.click(screen.getByTestId("fast-forward"));
-    expect(actions.sandFastForward).toHaveBeenCalledWith(90);
+    expect(actions.startJob).toHaveBeenCalledWith("sand_fast_forward", { days: 90 });
+    expect(await screen.findByTestId("job-message")).toHaveTextContent("18 of 90 days");
+    // polls until the job is finished
+    await waitFor(() => expect(screen.getByTestId("job-state")).toHaveTextContent("completed"));
+    expect(screen.getByTestId("job-message")).toHaveTextContent("fast-forwarded 90 days");
     await userEvent.click(screen.getByRole("button", { name: "Edit inputs / inspections" }));
     expect(go).toHaveBeenCalledWith("sandinputs");
   });
@@ -189,5 +200,29 @@ describe("SDT-101 on the schematic", () => {
     expect(screen.queryByTestId("panel-XT3001")).toBeNull();
     await userEvent.click(screen.getByTestId("sand-detector"));
     expect(onNavigate).toHaveBeenCalledWith("sand");
+  });
+});
+
+describe("Background job progress", () => {
+  it("cancels a running job and reports what was kept", async () => {
+    current = base();
+    actions.jobStatus.mockResolvedValue(job("running", 0.3, "27 of 90 days"));
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
+    await userEvent.click(screen.getByTestId("fast-forward"));
+    expect(screen.getByTestId("fast-forward")).toBeDisabled(); // one job at a time
+    await userEvent.click(await screen.findByTestId("job-cancel"));
+    expect(actions.cancelJob).toHaveBeenCalledWith("j1");
+    await waitFor(() => expect(screen.getByTestId("job-state")).toHaveTextContent("cancelled"));
+    expect(screen.getByTestId("job-message")).toHaveTextContent("cancelled by the user at 30 %");
+  });
+
+  it("shows why a job was rejected", async () => {
+    current = base();
+    actions.startJob.mockResolvedValueOnce("another job is already running for this session - wait for it or cancel it");
+    const { ChokeHealthPage } = await import("@/pages/ChokeHealthPage");
+    render(<ChokeHealthPage />);
+    await userEvent.click(screen.getByTestId("fast-forward"));
+    expect(await screen.findByTestId("job-error")).toHaveTextContent("already running");
   });
 });

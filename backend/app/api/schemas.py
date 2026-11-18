@@ -67,6 +67,11 @@ class MPFMFaultRequest(_Req):
     pt_failed: bool | None = None
 
 
+class JobRequest(_Req):
+    kind: Annotated[str, Field(min_length=1, max_length=64)]
+    params: dict = Field(default_factory=dict)
+
+
 class RecordRequest(_Req):
     label: Annotated[str, Field(min_length=1, max_length=120)]
     notes: Annotated[str, Field(max_length=2000)] | None = None

@@ -555,6 +555,15 @@ class SandChokeSystem:
     def fast_forward(self, days: float) -> None:
         """Quasi-steady integration of wear and cumulative sand / production
         at the CURRENT operating point (training: months of service in seconds)."""
+        for _ in self.fast_forward_steps(days):
+            pass
+
+    def fast_forward_steps(self, days: float):
+        """Generator form of ``fast_forward``: one integration step (<= 1 day)
+        per ``next()``, yielding the days done. The operating point is frozen
+        at the start, so interleaving with the live simulation (background
+        job) gives the same result. Closing the generator early keeps the
+        days already integrated."""
         op = self.last_op or self.operating_point()
         if op is None:
             return
@@ -577,7 +586,8 @@ class SandChokeSystem:
             self.cum["water_sm3"] += q_liq * op.wc * dt
             self.cum["gas_sm3"] += q_liq * (1 - op.wc) * op.gor * dt
             self.log.add(self.service_s / S_PER_DAY, self.dd_base, self.plug_base, self.cum["choke_kg"], self.cum["liquid_sm3"])
-        self._last_log = self.service_s
+            self._last_log = self.service_s
+            yield dt / S_PER_DAY
         self._update_rates_only()
 
     # ============================================================ reporting

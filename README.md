@@ -131,6 +131,7 @@ Engineering parameters live only in scenario files.
 * [Pipeline transient model](docs/PIPELINE_TRANSIENT_MODEL.md) · [Chemical transport](docs/CHEMICAL_TRANSPORT_MODEL.md) · [Instrument response](docs/INSTRUMENT_RESPONSE_MODEL.md) · [Simulation time](docs/SIMULATION_TIME_MANAGEMENT.md)
 * [Engineering validation](docs/ENGINEERING_VALIDATION.md) · [Choke erosion](docs/CHOKE_EROSION_MODEL.md) · [Choke maintenance](docs/CHOKE_MAINTENANCE_MODEL.md) · [Choke cavitation](docs/CHOKE_CAVITATION_MODEL.md)
 * [Simulation records](docs/SIMULATION_RECORDS.md): saved assessments, provenance, model versions
+* [Background jobs](docs/BACKGROUND_JOBS.md): long calculations without freezing the server
 * [Architecture](docs/ARCHITECTURE.md)
 * [Engineering assumptions](docs/ENGINEERING_ASSUMPTIONS.md): units, equations, limitations
 * [Simulation model](docs/SIMULATION_MODEL.md): modules, step sequence, CoolProp evaluation

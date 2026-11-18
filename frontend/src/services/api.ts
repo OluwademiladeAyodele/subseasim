@@ -1,4 +1,5 @@
 import type { ExerciseSummary, SandChokeInputs, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
+import type { Job } from "@/types/jobs";
 import type { RecordSummary, SimulationRecord } from "@/types/records";
 
 /** Scenario a brand-new session starts with (dynamic model, full system). */
@@ -83,6 +84,10 @@ export const api = {
   mpfmFaults: (sid: string, body: Record<string, number | boolean>) => request<SessionPayload>("PUT", `/api/sessions/${sid}/mpfm/faults`, body),
   mpfmCalibrate: (sid: string) => request<SessionPayload>("POST", `/api/sessions/${sid}/mpfm/calibrate`),
   sandInputs: (sid: string, body: SandChokeInputs) => request<SessionPayload>("PUT", `/api/sessions/${sid}/sand-choke/inputs`, body),
+  submitJob: (sid: string, kind: string, params: Record<string, unknown>) => request<Job>("POST", `/api/sessions/${sid}/jobs`, { kind, params }),
+  getJob: (id: string) => request<Job>("GET", `/api/jobs/${id}`),
+  cancelJob: (id: string) => request<Job>("POST", `/api/jobs/${id}/cancel`),
+  listJobs: (sid: string) => request<Job[]>("GET", `/api/sessions/${sid}/jobs`),
   saveRecord: (sid: string, label: string, notes: string | null) =>
     request<RecordSummary>("POST", `/api/sessions/${sid}/records`, { label, notes }),
   listRecords: (scenarioId?: string) => request<RecordSummary[]>("GET", `/api/records${scenarioId ? `?scenario_id=${encodeURIComponent(scenarioId)}` : ""}`),

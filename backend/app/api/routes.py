@@ -16,6 +16,7 @@ from app.api.schemas import (
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    JobRequest,
     RecordRequest,
     SandCsvRequest,
     SelectorCommandRequest,
@@ -31,6 +32,8 @@ from app.scenarios.loader import ScenarioNotFound, get_scenario, list_scenarios
 from app.sessions import Session, SessionLimitReached, manager
 from app.simulation.components.elements import CommandRejected
 from app.simulation.engine import InvalidOperatingInput
+from app import job_kinds  # noqa: F401 - registers the job kinds
+from app.jobs import JobRejected, jobs
 from app.storage import assessment, records
 from app.training.framework import TrainingError
 from app.training.registry import EXERCISES
@@ -294,6 +297,39 @@ async def sand_measurements_csv(sid: str, req: SandCsvRequest) -> dict:
     out = await _after_change(s)
     out["imported"] = n
     return out
+
+
+@router.post("/sessions/{sid}/jobs", status_code=202)
+async def submit_job(sid: str, req: JobRequest) -> dict:
+    """Start a background job (e.g. kind 'sand_fast_forward', params {days})."""
+    s = _session(sid)
+    try:
+        job = jobs.submit(s, req.kind, req.params, is_alive=lambda: manager.sessions.get(sid) is s)
+    except JobRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return job.to_dict()
+
+
+@router.get("/sessions/{sid}/jobs")
+def list_jobs(sid: str) -> list[dict]:
+    _session(sid)
+    return [j.to_dict() for j in jobs.for_session(sid)]
+
+
+@router.get("/jobs/{jid}")
+def get_job(jid: str) -> dict:
+    try:
+        return jobs.get(jid).to_dict()
+    except KeyError:
+        raise HTTPException(404, f"job {jid} not found") from None
+
+
+@router.post("/jobs/{jid}/cancel")
+def cancel_job(jid: str) -> dict:
+    try:
+        return jobs.cancel(jid).to_dict()
+    except KeyError:
+        raise HTTPException(404, f"job {jid} not found") from None
 
 
 @router.post("/sessions/{sid}/records", status_code=201)

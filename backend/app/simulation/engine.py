@@ -297,14 +297,40 @@ class SimulationEngine:
                              origin="illustrative example")
 
     def sand_fast_forward(self, days: float) -> None:
+        for _ in self.sand_fast_forward_steps(days):
+            pass
+
+    def sand_fast_forward_steps(self, days: float):
+        """Generator: fast-forward choke wear one day per step, yielding
+        (fraction done, message). Closing it early (job cancelled) keeps the
+        days already integrated and logs exactly how many."""
         if self.sand is None:
             raise CommandRejected("sand and choke erosion need the three-phase fluid model")
-        self.sand.fast_forward(days)
-        self.events.add(self.time_s, "instrument",
-                        f"Choke wear fast-forwarded {days:g} days at the current operating point (quasi-steady: sand rate, opening "
-                        f"and differential held constant); trim service time now {self.sand.service_s / 86400:.0f} days")
-        self._sand_events(force=True)
-        self._record_sample(force=True)
+        sand = self.sand
+        inputs = sand.inputs
+        done = 0.0
+        finished = False
+        try:
+            for d in sand.fast_forward_steps(days):
+                if self.sand is not sand or sand.inputs is not inputs:
+                    from app.jobs import JobAborted
+
+                    raise JobAborted(f"sand / choke inputs changed after {done:g} of {days:g} days - fast-forward stopped "
+                                     "(the days done are kept)")
+                done += d
+                yield min(done / days, 1.0), f"{done:.0f} of {days:g} days"
+            finished = True
+        finally:
+            if self.sand is sand:
+                if not finished:
+                    sand._update_rates_only()
+                what = (f"Choke wear fast-forwarded {days:g} days" if finished
+                        else f"Choke wear fast-forward STOPPED after {done:.0f} of {days:g} days (the days done are kept)")
+                self.events.add(self.time_s, "instrument",
+                                f"{what} at the current operating point (quasi-steady: sand rate, opening and differential held "
+                                f"constant); trim service time now {sand.service_s / 86400:.0f} days")
+                self._sand_events(force=True)
+                self._record_sample(force=True)
 
     def _sand_events(self, force: bool = False) -> None:
         s = self.sand

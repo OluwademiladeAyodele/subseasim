@@ -205,6 +205,7 @@ test("sand & choke: inputs drive the prediction, choke health and fast-forward",
   await expect(page.getByTestId("health-category")).not.toHaveText("Unavailable", { timeout: 15_000 });
   await expect(page.getByTestId("confidence")).toContainText("screening");
   await page.getByTestId("fast-forward").click();
+  await expect(page.getByTestId("job-state")).toHaveText("completed", { timeout: 30_000 });
   await expect(page.getByTestId("criterion-hole")).toBeVisible();
   // the sand source (onset and rates to the choke) is on the same page
   await expect(page.getByTestId("sand-source")).toBeVisible();
@@ -264,4 +265,22 @@ test("simulation records: save the current assessment and inspect its provenance
   await expect(page.getByTestId("record-validation")).toContainText("not field-validated");
   await page.getByRole("button", { name: `delete ${label}` }).click();
   await expect(page.getByTestId("records-table").getByText(label)).toHaveCount(0);
+});
+
+test("background job: a 10-year fast-forward runs without freezing the workstation and can be cancelled", async ({ page }) => {
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-max-hole")).toHaveValue("1.5", { timeout: 15_000 });
+  await startFast(page, "60");
+  await nav(page, "Choke health");
+  await page.getByLabel("Fast-forward days").fill("3650");
+  await page.getByTestId("fast-forward").click();
+  await expect(page.getByTestId("job-state")).toHaveText("running", { timeout: 10_000 });
+  // the live simulation keeps streaming while the job runs
+  await expect(page.getByTestId("connection").first()).toHaveText("live");
+  await expect(page.getByTestId("job-message")).toContainText("of 3650 days");
+  await page.getByTestId("job-cancel").click();
+  await expect(page.getByTestId("job-state")).toHaveText("cancelled", { timeout: 10_000 });
+  await nav(page, "Event history");
+  await expect(page.getByTestId("event-log")).toContainText("fast-forward STOPPED after");
 });
