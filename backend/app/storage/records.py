@@ -22,7 +22,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 2  # 2: has_comparison column (migrated in place from 1)
+SCHEMA_VERSION = 3  # 2: has_comparison column; 3: surrogates table (migrated in place)
 _DEFAULT = Path(__file__).resolve().parent.parent.parent / "data" / "records.sqlite"
 _lock = threading.Lock()
 
@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS simulation_records (
 );
 CREATE INDEX IF NOT EXISTS ix_records_created ON simulation_records (created_at);
 CREATE INDEX IF NOT EXISTS ix_records_scenario ON simulation_records (scenario_id);
+CREATE TABLE IF NOT EXISTS surrogates (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    method TEXT NOT NULL,
+    scenario_id TEXT,
+    n_cases INTEGER NOT NULL,
+    sources TEXT NOT NULL,
+    body TEXT NOT NULL
+);
 """
 
 SUMMARY_COLS = ("id", "created_at", "label", "notes", "scenario_id", "scenario_name", "session_id", "sim_time_s",
@@ -119,6 +129,43 @@ def get(rid: str) -> dict:
     if r is None:
         raise RecordNotFound(rid)
     return json.loads(r["body"])
+
+
+# ------------------------------------------------------------ surrogates
+def save_surrogate(sur) -> dict:
+    """Store a trained surrogate (its CASE LIBRARY and settings; the model is
+    refitted deterministically on load)."""
+    sid = uuid.uuid4().hex
+    row = {"id": sid, "created_at": sur.created_at, "name": sur.name, "method": sur.method, "scenario_id": sur.scenario_id,
+           "n_cases": len(sur.cases), "sources": json.dumps(sur.source_summary)}
+    with _connect() as con:
+        con.execute("INSERT INTO surrogates (id, created_at, name, method, scenario_id, n_cases, sources, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (sid, row["created_at"], row["name"], row["method"], row["scenario_id"], row["n_cases"], row["sources"], json.dumps(sur.to_dict())))
+    return row | {"sources": sur.source_summary}
+
+
+def list_surrogates() -> list[dict]:
+    with _connect() as con:
+        rows = [dict(r) for r in con.execute("SELECT id, created_at, name, method, scenario_id, n_cases, sources FROM surrogates "
+                                             "ORDER BY created_at DESC, rowid DESC")]
+    for r in rows:
+        r["sources"] = json.loads(r["sources"])
+    return rows
+
+
+def get_surrogate_body(sid: str) -> dict:
+    with _connect() as con:
+        r = con.execute("SELECT body FROM surrogates WHERE id = ?", (sid,)).fetchone()
+    if r is None:
+        raise RecordNotFound(sid)
+    return json.loads(r["body"])
+
+
+def delete_surrogate(sid: str) -> None:
+    with _connect() as con:
+        n = con.execute("DELETE FROM surrogates WHERE id = ?", (sid,)).rowcount
+    if n == 0:
+        raise RecordNotFound(sid)
 
 
 def delete(rid: str) -> None:

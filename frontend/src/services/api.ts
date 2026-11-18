@@ -1,6 +1,7 @@
 import type { ExerciseSummary, SandChokeInputs, ScenarioInfo, SessionPayload, SimMode, ValveCommand } from "@/types/simulation";
 import type { Job } from "@/types/jobs";
 import type { RecordSummary, SimulationRecord } from "@/types/records";
+import type { Prediction, SimulatorCheck, SurrogateCard, SurrogateSummary } from "@/types/surrogates";
 
 /** Scenario a brand-new session starts with (dynamic model, full system). */
 export const DEFAULT_SCENARIO = "xt_230xp22b_multiphase";
@@ -88,6 +89,14 @@ export const api = {
   getJob: (id: string) => request<Job>("GET", `/api/jobs/${id}`),
   cancelJob: (id: string) => request<Job>("POST", `/api/jobs/${id}/cancel`),
   listJobs: (sid: string) => request<Job[]>("GET", `/api/sessions/${sid}/jobs`),
+  listSurrogates: () => request<SurrogateSummary[]>("GET", "/api/surrogates"),
+  getSurrogate: (id: string) => request<SurrogateCard>("GET", `/api/surrogates/${id}`),
+  predictSurrogate: (id: string, inputs: Record<string, number>) => request<Prediction>("POST", `/api/surrogates/${id}/predict`, { inputs }),
+  checkSurrogate: (sid: string, id: string, inputs: Record<string, number>) =>
+    request<SimulatorCheck>("POST", `/api/sessions/${sid}/surrogates/${id}/check`, { inputs }),
+  importSurrogate: (body: { name: string; method: string; inputs: string[]; outputs: string[]; csv: string }) =>
+    request<SurrogateSummary & { card: SurrogateCard }>("POST", "/api/surrogates/import", body),
+  deleteSurrogate: (id: string) => request<null>("DELETE", `/api/surrogates/${id}`),
   saveRecord: (sid: string, label: string, notes: string | null, comparisonJobId?: string) =>
     request<RecordSummary>("POST", `/api/sessions/${sid}/records`, { label, notes, comparison_job_id: comparisonJobId ?? null }),
   listRecords: (scenarioId?: string) => request<RecordSummary[]>("GET", `/api/records${scenarioId ? `?scenario_id=${encodeURIComponent(scenarioId)}` : ""}`),

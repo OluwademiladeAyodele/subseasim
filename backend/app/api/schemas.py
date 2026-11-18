@@ -72,6 +72,18 @@ class JobRequest(_Req):
     params: dict = Field(default_factory=dict)
 
 
+class SurrogatePredictRequest(_Req):
+    inputs: dict[str, float]
+
+
+class SurrogateImportRequest(_Req):
+    name: Annotated[str, Field(min_length=1, max_length=80)]
+    method: Literal["gp", "poly"] = "gp"
+    inputs: Annotated[list[str], Field(min_length=1, max_length=7)]
+    outputs: Annotated[list[str], Field(min_length=1, max_length=9)]
+    csv: str = Field(max_length=2_000_000)
+
+
 class RecordRequest(_Req):
     label: Annotated[str, Field(min_length=1, max_length=120)]
     notes: Annotated[str, Field(max_length=2000)] | None = None

@@ -133,6 +133,7 @@ Engineering parameters live only in scenario files.
 * [Simulation records](docs/SIMULATION_RECORDS.md): saved assessments, provenance, model versions
 * [Background jobs](docs/BACKGROUND_JOBS.md): long calculations without freezing the server
 * [Scenario comparison and reports](docs/SCENARIO_COMPARISON_AND_REPORTS.md): compare operating options, printable engineering reports
+* [Surrogate models](docs/SURROGATE_MODELS.md): fast predictions with uncertainty inside a validated envelope
 * [Architecture](docs/ARCHITECTURE.md)
 * [Engineering assumptions](docs/ENGINEERING_ASSUMPTIONS.md): units, equations, limitations
 * [Simulation model](docs/SIMULATION_MODEL.md): modules, step sequence, CoolProp evaluation

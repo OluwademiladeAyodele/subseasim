@@ -68,6 +68,10 @@ MODELS: dict[str, dict] = {
         "version": "1.0", "status": "Correlation-based screening",
         "method": "IEC 60534-2-1 FL vena-contracta / choked dP; sigma = (P1 - Pv)/(P1 - P2) vs valve-specific limits; IAPWS-IF97 Pv",
         "validation": "Verified against IF97 verification values and hand calculation; not CFD", "doc": "CHOKE_CAVITATION_MODEL.md"},
+    "surrogate": {
+        "version": "1.0", "status": "Surrogate-model prediction",
+        "method": "Gaussian process (ARD squared-exponential, max. marginal likelihood) or quadratic response surface on a case library; envelope check",
+        "validation": "Leave-one-out cross-validation against its training source (RMSE, R2, 95 % coverage); inherits that source's limitations", "doc": "SURROGATE_MODELS.md"},
     "api14e": {
         "version": "1.0", "status": "Correlation-based screening",
         "method": "API RP 14E erosional velocity Ve = C / sqrt(rho_m), supplementary",

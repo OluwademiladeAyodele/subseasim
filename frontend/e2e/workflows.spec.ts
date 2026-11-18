@@ -307,3 +307,24 @@ test("scenario comparison: run a study, save it with a record and open the engin
   await expect(report.getByText("12. Scenario comparison")).toBeVisible();
   await expect(report.getByText(/Validation status: Verified models, not field-validated/)).toBeVisible();
 });
+
+test("surrogate model: train on simulator cases, predict inside the envelope and check with the simulator", async ({ page }) => {
+  test.setTimeout(150_000);
+  await nav(page, "Sand & choke inputs");
+  await page.getByTestId("sand-load-example").click();
+  await expect(page.getByTestId("in-max-hole")).toHaveValue("1.5", { timeout: 15_000 });
+  await nav(page, "Surrogate models");
+  await page.getByLabel("Surrogate name", { exact: true }).fill(`e2e choke ${Date.now()}`);
+  await page.getByLabel("use Water cut").uncheck();
+  await page.getByLabel("Number of cases").fill("8");
+  await page.getByTestId("train-surrogate").click();
+  await expect(page.getByTestId("job-state")).toHaveText("completed", { timeout: 90_000 });
+  await expect(page.getByTestId("surrogate-status")).toContainText("not CFD or field data", { timeout: 20_000 });
+  await expect(page.getByTestId("surrogate-envelope")).toContainText("Inside the validated envelope");
+  await page.getByTestId("surrogate-check").click();
+  await expect(page.getByTestId("check-oil_sm3_d")).not.toHaveText("—", { timeout: 20_000 });
+  const choke = page.getByLabel("predict Choke opening");
+  await choke.fill("95");
+  await page.getByTestId("surrogate-predict").click();
+  await expect(page.getByTestId("surrogate-envelope")).toContainText("Outside the training range");
+});

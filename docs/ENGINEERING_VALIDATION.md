@@ -149,6 +149,21 @@ Document: `CHOKE_CAVITATION_MODEL.md`. Tests: `test_cavitation.py` and
 manufacturer for this trim; collapse location and damage rate are not
 computed.
 
+## 6b. Surrogate models
+
+Document: `SURROGATE_MODELS.md`. Test: `test_surrogates.py`.
+
+| Check | Reference |
+|---|---|
+| GP accuracy and leave-one-out | Known function; closed-form LOO equals brute-force refits |
+| Quadratic surface | Exact on a quadratic |
+| Simulator-trained surrogate | Matches the simulator at a new point within 2 % |
+| Envelope | Out-of-range and void points flagged |
+
+**Not validated:** a surrogate is validated only against its training
+source (shown as leave-one-out R², RMSE and 95 % coverage). No CFD data are
+bundled.
+
 ## 7. Integrated system test: Exercise 7
 
 Test: `test_training_integrated.py`. It plays the 14-stage integrated

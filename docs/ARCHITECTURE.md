@@ -56,6 +56,7 @@ supports branches, check valves, chemical bands, zoom and pan. See
 | `app/simulation/` | Engineering engine (see SIMULATION_MODEL.md) |
 | `app/training/` | Exercise framework, exercise definitions, registry |
 | `app/jobs.py`, `app/job_kinds.py` | Cooperative background jobs on the event loop (see BACKGROUND_JOBS.md) |
+| `app/surrogates/` | Surrogate models (GP, response surface), simulator design of experiments, envelope (see SURROGATE_MODELS.md) |
 | `app/studies/`, `app/reports/` | Scenario comparison on steady twins; engineering report (HTML) from records |
 | `app/storage/` | Simulation records: SQLite store and record builder (see SIMULATION_RECORDS.md) |
 | `app/core/model_registry.py` | Method, version, model status and validation of every calculation module |
