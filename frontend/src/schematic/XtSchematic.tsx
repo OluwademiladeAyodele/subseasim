@@ -108,13 +108,14 @@ function useZoomPan(width: number, height: number) {
 /* ------------------------------------------------------------------ symbols */
 
 function TagLabel({ x, y, text, anchor, status, selected }: { x: number; y: number; text: string; anchor: "start" | "middle" | "end"; status?: string; selected?: boolean }) {
-  const w = Math.max(44, text.length * 6.6 + 10);
+  const w = Math.max(50, text.length * 7.7 + 12);
   const x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
   const dashed = status === "addition" ? "3 2" : status === "uncertain" || status === "placeholder" ? "1.5 1.5" : undefined;
   return (
-    <g pointerEvents="none">
-      <rect x={x0} y={y - 8} width={w} height={15} rx={2} fill={XT.panel} stroke={selected ? COLORS.accent : "#94a3b8"} strokeWidth={selected ? 1.6 : 0.8} strokeDasharray={dashed} />
-      <text x={x0 + w / 2} y={y + 3.5} textAnchor="middle" fontSize={10} fontWeight={700} fill={status === "addition" ? COLORS.muted : XT.ink} fontStyle={status === "addition" ? "italic" : undefined}>
+    // part of the valve's click target: clicking the tag selects the valve
+    <g>
+      <rect x={x0} y={y - 9.5} width={w} height={18} rx={2} fill={XT.panel} stroke={selected ? COLORS.accent : "#94a3b8"} strokeWidth={selected ? 1.6 : 0.8} strokeDasharray={dashed} />
+      <text x={x0 + w / 2} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={700} fill={status === "addition" ? COLORS.muted : XT.ink} fontStyle={status === "addition" ? "italic" : undefined}>
         {text}
       </text>
     </g>
@@ -200,7 +201,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
     const rows = tags.map((t) => instByTag.get(t)).filter(Boolean) as InstrumentSnapshot[];
     const row = c.h < 45; // single-row panel (tag | value), as PD3014 on the reference
     const anySel = rows.some((r) => r.tag === selInst);
-    const H_HEAD = row ? c.h : 15;
+    const H_HEAD = row ? c.h : 18;
     const H_ROW = rows.length ? (c.h - (row ? 0 : H_HEAD)) / (row ? 1 : rows.length) : 0;
     return (
       <g key={c.id} data-testid={`panel-${c.id}`}>
@@ -208,7 +209,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
         <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={XT.panel} stroke={anySel ? COLORS.accent : "#94a3b8"} strokeWidth={anySel ? 2 : 0.9}
           filter="url(#xtsoft)" />
         {!row && <rect x={c.x} y={c.y} width={c.w} height={H_HEAD} rx={2} fill={XT.panelHead} />}
-        <text x={c.x + 5} y={c.y + (row ? c.h / 2 + 3.5 : 11)} fontSize={10} fontWeight={700} fill={XT.ink} pointerEvents="none">
+        <text x={c.x + 5} y={c.y + (row ? c.h / 2 + 4 : 13.5)} fontSize={11.5} fontWeight={700} fill={XT.ink} pointerEvents="none">
           {c.id}
         </text>
         {rows.map((inst, k) => {
@@ -223,9 +224,9 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
               onClick={() => onSelect({ type: "instrument", tag: inst.tag })}>
               <rect x={row ? c.x + c.w * 0.45 : c.x + 1} y={y0 + 1} width={row ? c.w * 0.55 - 1 : c.w - 2} height={(row ? c.h : H_ROW) - 2}
                 fill={sel ? SCH.selected : "transparent"} />
-              <text x={c.x + c.w - 5} y={y0 + (row ? c.h : H_ROW) / 2 + 4} textAnchor="end" fontSize={10.5} className="num"
+              <text x={c.x + c.w - 5} y={y0 + (row ? c.h : H_ROW) / 2 + 4.5} textAnchor="end" fontSize={13} fontWeight={600} className="num"
                 fill={bad ? XT.fault : nm ? COLORS.static : XT.ink}>
-                {txt} <tspan fontSize={8.5} fill={COLORS.muted}>{bad || nm ? "" : dsp.unit}</tspan>
+                {txt} <tspan fontSize={10} fontWeight={400} fill={COLORS.muted}>{bad || nm ? "" : dsp.unit}</tspan>
               </text>
             </Clickable>
           );
@@ -259,17 +260,17 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
           ["Set", `${fmt(v.commanded_pct, 1)} %`],
           ["ΔP", v.dp_pa == null ? "—" : `${fmt(paToBarDelta(v.dp_pa), 1)} bar`],
         ];
-        const hh = (c.h - 15) / 3;
+        const hh = (c.h - 18) / 3;
         return (
           <Clickable key={c.id} id={c.id} label={`${displayTag(state, v.tag)} choke position`} selected={selEl === id} testid={`panel-${c.id}`}
             onClick={() => onSelect({ type: "element", id })}>
             <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={XT.panel} stroke={selEl === id ? COLORS.accent : "#94a3b8"} strokeWidth={selEl === id ? 2 : 0.9} filter="url(#xtsoft)" />
-            <rect x={c.x} y={c.y} width={c.w} height={15} rx={2} fill={XT.panelHead} />
-            <text x={c.x + 5} y={c.y + 11} fontSize={10} fontWeight={700} fill={XT.ink}>{displayTag(state, v.tag)}</text>
+            <rect x={c.x} y={c.y} width={c.w} height={18} rx={2} fill={XT.panelHead} />
+            <text x={c.x + 5} y={c.y + 13.5} fontSize={11.5} fontWeight={700} fill={XT.ink}>{displayTag(state, v.tag)}</text>
             {rows.map(([k, val], i) => (
               <g key={k}>
-                <text x={c.x + 5} y={c.y + 15 + hh * i + hh / 2 + 3.5} fontSize={9} fill={COLORS.muted}>{k}</text>
-                <text x={c.x + c.w - 5} y={c.y + 15 + hh * i + hh / 2 + 3.5} textAnchor="end" fontSize={10.5} className="num" fill={XT.ink}>{val}</text>
+                <text x={c.x + 5} y={c.y + 18 + hh * i + hh / 2 + 4} fontSize={10.5} fill={COLORS.muted}>{k}</text>
+                <text x={c.x + c.w - 5} y={c.y + 18 + hh * i + hh / 2 + 4} textAnchor="end" fontSize={12.5} fontWeight={600} className="num" fill={XT.ink}>{val}</text>
               </g>
             ))}
           </Clickable>
@@ -278,7 +279,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
       case "sand_detector": {
         const det = state.sand_choke?.available ? state.sand_choke.detector : undefined;
         const alarm = !!det?.alarm;
-        const txt = !det ? "three-phase model off" : det.reading_g_s == null ? det.status.toLowerCase().replace(/_/g, " ") : `${fmt(det.reading_g_s, 3)} g/s`;
+        const txt = !det ? "off" : det.reading_g_s == null ? det.status.toLowerCase().replace(/_/g, " ") : `${fmt(det.reading_g_s, 3)} g/s`;
         return (
           <g key={c.id} data-testid={`panel-${c.id}`}>
             {c.tap && <TapLeader c={c} />}
@@ -286,8 +287,8 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
               <title>{det ? `${det.tag}: ${det.type.replace(/_/g, " ")} - click for sand monitoring` : c.note}</title>
               <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={alarm ? "#fee2e2" : XT.panel} stroke={alarm ? XT.closed : "#94a3b8"} strokeWidth={alarm ? 1.6 : 0.9}
                 strokeDasharray={det ? undefined : "1.5 1.5"} />
-              <text x={c.x + 5} y={c.y + c.h / 2 + 3.5} fontSize={10} fontWeight={700} fill={XT.ink}>{c.id}</text>
-              <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 3.5} textAnchor="end" fontSize={9.5} className="num" fill={alarm ? XT.closed : det ? XT.ink : COLORS.static}>
+              <text x={c.x + 5} y={c.y + c.h / 2 + 4} fontSize={11.5} fontWeight={700} fill={XT.ink}>{c.id}</text>
+              <text x={c.x + c.w - 5} y={c.y + c.h / 2 + 4} textAnchor="end" fontSize={11.5} fontWeight={600} className="num" fill={alarm ? XT.closed : det ? XT.ink : COLORS.static}>
                 {txt}
               </text>
             </Clickable>
@@ -302,9 +303,9 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
             {c.tap && <TapLeader c={c} />}
             <Clickable id={c.id} label={`${c.id} hydraulic pressure`} selected={sel} testid={`hyd-${id}`} onClick={() => onSelect({ type: "hydraulic", id })}>
               <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={2} fill={sel ? SCH.selected : XT.panel} stroke={sel ? COLORS.accent : hp && !hp.ok ? XT.closed : "#94a3b8"} strokeWidth={sel ? 2 : 0.9} />
-              <text x={c.x + 4} y={c.y + 10} fontSize={8.5} fontWeight={700} fill={XT.ink}>{c.id}</text>
-              <text x={c.x + c.w - 4} y={c.y + c.h - 4} textAnchor="end" fontSize={10} className="num" fill={hp && !hp.ok ? XT.closed : XT.ink}>
-                {hp ? fmt(pressureFromPa(hp.p, prefs.pressureRef), 1) : "—"} <tspan fontSize={8} fill={COLORS.muted}>{prefs.pressureRef}</tspan>
+              <text x={c.x + 4} y={c.y + 12} fontSize={10.5} fontWeight={700} fill={XT.ink}>{c.id}</text>
+              <text x={c.x + c.w - 4} y={c.y + c.h - 5} textAnchor="end" fontSize={12.5} fontWeight={600} className="num" fill={hp && !hp.ok ? XT.closed : XT.ink}>
+                {hp ? fmt(pressureFromPa(hp.p, prefs.pressureRef), 1) : "—"} <tspan fontSize={9.5} fontWeight={400} fill={COLORS.muted}>{prefs.pressureRef}</tspan>
               </text>
             </Clickable>
           </g>
@@ -322,6 +323,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
             <g transform={`translate(${c.x} ${c.y}) rotate(${c.rotation})`}>
               <ValveGlyph v={pseudo} size={11} />
             </g>
+            <text x={c.x} y={c.y + 22} textAnchor="middle" fontSize={10.5} fontWeight={700} fill={XT.ink} pointerEvents="none">{displayTag(state, id)}</text>
           </Clickable>
         );
       }
@@ -329,7 +331,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
         return (
           <Clickable key={c.id} id={c.id} label={c.note || c.id} selected={false} testid={`btn-${c.id}`} onClick={() => onNavigate(id)}>
             <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={3} fill="#f8fafc" stroke="#64748b" strokeWidth={0.9} />
-            <text x={c.x + c.w / 2} y={c.y + c.h / 2 + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={XT.ink}>SCM Diagnostic</text>
+            <text x={c.x + c.w / 2} y={c.y + c.h / 2 + 3.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={XT.ink}>SCM Diagnostic</text>
           </Clickable>
         );
       case "mpfm": {
@@ -348,9 +350,9 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
                 <rect x={c.x + c.w * 0 + 22} y={c.y - c.h / 2} width={c.w} height={c.h} rx={2} fill={sel ? SCH.selected : XT.panel}
                   stroke={sel ? COLORS.accent : "#94a3b8"} strokeWidth={sel ? 2 : 0.9} strokeDasharray="3 2" filter="url(#xtsoft)" />
                 <circle cx={c.x + 30} cy={c.y - c.h / 2 + 9} r={3.5} fill={qcol} />
-                <text x={c.x + 37} y={c.y - c.h / 2 + 12} fontSize={10} fontWeight={700} fill={XT.ink}>{m?.tag ?? c.id}</text>
-                <text x={c.x + 22 + c.w - 5} y={c.y - c.h / 2 + 12} textAnchor="end" fontSize={8.5} fill={qcol}>{m?.quality ?? ""}</text>
-                <text x={c.x + 27} y={c.y + c.h / 2 - 6} fontSize={9.5} className="num" fill={XT.ink}>
+                <text x={c.x + 37} y={c.y - c.h / 2 + 12} fontSize={11} fontWeight={700} fill={XT.ink}>{m?.tag ?? c.id}</text>
+                <text x={c.x + 22 + c.w - 5} y={c.y - c.h / 2 + 12} textAnchor="end" fontSize={9.5} fontWeight={600} fill={qcol}>{m?.quality === "NOT_MODELLED" ? "N/M" : m?.quality ?? ""}</text>
+                <text x={c.x + 27} y={c.y + c.h / 2 - 6} fontSize={10.5} className="num" fill={XT.ink}>
                   {meas ? `${fmt(meas.oil_sm3_d, 0)} Sm³/d oil · WC ${fmt(meas.water_cut * 100, 0)}%` : m?.quality === "NOT_MODELLED" ? "three-phase model off" : "—"}
                 </text>
               </g>
@@ -476,7 +478,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
         {L.groups.map((g) => (
           <g key={g.id} pointerEvents="none">
             {g.frame && <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={4} fill={g.id === "additions" ? "#f8fafc" : "none"} stroke="#94a3b8" strokeWidth={1} />}
-            <text x={g.x + 6} y={g.y + (g.frame ? 14 : -4)} fontSize={g.frame ? 10.5 : 9} fontWeight={600} fill={g.frame ? XT.ink : "#94a3b8"} letterSpacing={g.frame ? 0 : 1}>
+            <text x={g.x + 6} y={g.y + (g.frame ? 14 : -4)} fontSize={g.frame ? 11.5 : 10} fontWeight={600} fill={g.frame ? XT.ink : "#64748b"} letterSpacing={g.frame ? 0 : 1}>
               {g.frame ? g.label : g.label.toUpperCase()}
             </text>
           </g>
@@ -540,7 +542,7 @@ function XtSchematicInner({ state, schematic: L, selection, onSelect, onNavigate
               <g transform={`translate(${k.x} ${k.y}) rotate(${rot})`}>
                 <polygon points="0,-6 10,-6 16,0 10,6 0,6" fill={injecting ? chemColor[cid] ?? XT.panel : XT.panel} stroke="#475569" strokeWidth={1.2} strokeLinejoin="round" />
               </g>
-              <text x={lx} y={ly} textAnchor={anchor} fontSize={9.5} fontWeight={600} fill="#475569">{k.label}</text>
+              <text x={lx} y={ly} textAnchor={anchor} fontSize={11} fontWeight={600} fill="#475569">{k.label}</text>
             </>
           );
           return clickable ? (
@@ -578,7 +580,7 @@ function Legend({ x, y, chems }: { x: number; y: number; chems: { id: string; na
   const valves: [string, string, boolean][] = [["Open", XT.open, true], ["Closed", XT.closed, true], ["Throttling / moving", XT.partial, false]];
   const lines: [string, string][] = [["Production", XT.line.production], ["Annulus / service", XT.line.annulus], ["Chemical (idle)", XT.line.chemical], ["Control hydraulics", XT.line.hydraulic]];
   return (
-    <g transform={`translate(${x} ${y})`} pointerEvents="none" data-testid="xt-legend">
+    <g transform={`translate(${x} ${y - 30}) scale(1.2)`} pointerEvents="none" data-testid="xt-legend">
       <rect width={228} height={150} rx={4} fill={XT.panel} fillOpacity={0.97} stroke="#cbd5e1" filter="url(#xtsoft)" />
       <text x={10} y={15} fontSize={9.5} fontWeight={700} fill={XT.ink}>LEGEND (reference HMI colours)</text>
       {valves.map(([l, c, solid], i) => (

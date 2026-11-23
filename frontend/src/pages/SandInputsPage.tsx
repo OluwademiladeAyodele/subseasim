@@ -36,7 +36,7 @@ function NumField({ label, unit, value, onChange, hint, testId }: { label: strin
 
 function SelField<T extends string>({ label, value, options, onChange }: { label: string; value: T | null; options: [T, string][]; onChange: (v: T | null) => void }) {
   return (
-    <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+    <label className="grid grid-cols-[minmax(0,1fr)_minmax(180px,260px)] items-center gap-2 py-0.5">
       <span className="text-[13px] text-muted">{label}</span>
       <Select aria-label={label} value={value ?? ""} onChange={(e) => onChange((e.target.value || null) as T | null)}>
         <option value="">— not set —</option>

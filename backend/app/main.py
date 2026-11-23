@@ -10,13 +10,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router, ws_router
 from app.core.config import settings
+from app.core.model_registry import APP_VERSION
+from app.storage.records import StorageUnavailable
 from app.sessions import manager
 
 
@@ -30,7 +32,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="SubseaSim",
     description="Educational subsea production simulator. All values are SIMULATED.",
-    version="0.1.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -41,6 +43,13 @@ app.add_middleware(
 )
 app.include_router(router)
 app.include_router(ws_router)
+
+
+@app.exception_handler(StorageUnavailable)
+async def _storage_unavailable(_: Request, exc: StorageUnavailable) -> JSONResponse:
+    # e.g. a root-owned volume while the server runs as a non-root user: say what to fix
+    return JSONResponse(status_code=503, content={"detail": f"Records storage unavailable: {exc}. Mount a writable volume at the "
+                                                            "SUBSEASIM_DB_PATH folder (Railway: also set RAILWAY_RUN_UID=0)."})
 
 # Production: serve the built frontend from the same origin.
 if settings.frontend_dist and Path(settings.frontend_dist).is_dir():

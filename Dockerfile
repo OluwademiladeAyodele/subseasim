@@ -16,7 +16,8 @@ RUN npx tsc -b --noEmit && npx vite build
 FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    SUBSEASIM_FRONTEND_DIST=/app/frontend_dist     SUBSEASIM_DB_PATH=/app/data/records.sqlite \
+    SUBSEASIM_FRONTEND_DIST=/app/frontend_dist \
+    SUBSEASIM_DB_PATH=/app/data/records.sqlite \
     PORT=8000 \
     OPENBLAS_NUM_THREADS=1 \
     OMP_NUM_THREADS=1 \
@@ -27,9 +28,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./frontend_dist
 RUN useradd --create-home --uid 10001 subseasim && mkdir -p /app/data && chown subseasim /app/data
-# Simulation records (SQLite). Mount a volume here to keep them across
-# redeploys (Railway: add a volume at /app/data); otherwise they are lost.
-VOLUME ["/app/data"]
+# Simulation records and surrogate models (SQLite) live in /app/data. Attach a
+# persistent volume there to keep them across redeploys (Railway: service ->
+# Volumes -> mount path /app/data; docker compose: see docker-compose.yml).
+# No VOLUME instruction: Railway rejects it and attaches volumes itself.
 USER subseasim
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import os,urllib.request;urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/api/health')"

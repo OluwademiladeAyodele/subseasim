@@ -71,8 +71,12 @@ equations or constants change. `APP_VERSION` is stamped on every record.
   `backend/data/records.sqlite`, which git ignores.
 - In Docker the file is `/app/data/records.sqlite`. `/app/data` is a volume
   in `docker-compose.yml`.
-- **On Railway, add a volume mounted at `/app/data`.** Without it, records
-  are lost at every redeploy.
+- **On Railway, add a volume mounted at `/app/data`** and set
+  `RAILWAY_RUN_UID=0`. Railway volumes are root-owned and the image runs as a
+  non-root user. Without the volume, records are lost at every redeploy.
+- If the folder cannot be written, the records and surrogate endpoints return
+  HTTP 503 ("Records storage unavailable", naming the path). The rest of the
+  simulator keeps working.
 - Table `simulation_records` holds the summary columns used for listing,
   plus the full record as JSON in `body`.
 - Table `meta` holds `schema_version` (2: `has_comparison`; 3: `surrogates` table; older files are migrated in place).

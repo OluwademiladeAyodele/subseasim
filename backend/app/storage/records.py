@@ -65,6 +65,11 @@ class RecordNotFound(KeyError):
     pass
 
 
+class StorageUnavailable(RuntimeError):
+    """The records database cannot be opened or written (e.g. a read-only or
+    root-owned volume)."""
+
+
 def db_path() -> Path:
     return Path(os.environ.get("SUBSEASIM_DB_PATH") or _DEFAULT)
 
@@ -72,15 +77,25 @@ def db_path() -> Path:
 @contextmanager
 def _connect():
     p = db_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise StorageUnavailable(f"cannot create the records folder {p.parent}: {exc}") from None
     with _lock:
-        con = sqlite3.connect(p, timeout=10)
+        try:
+            con = sqlite3.connect(p, timeout=10)
+        except sqlite3.Error as exc:
+            raise StorageUnavailable(f"cannot open the records database {p}: {exc}") from None
         try:
             con.row_factory = sqlite3.Row
             con.executescript(_SCHEMA)
             _migrate(con)
             yield con
             con.commit()
+        except sqlite3.OperationalError as exc:
+            if "readonly" in str(exc) or "unable to open" in str(exc) or "disk" in str(exc):
+                raise StorageUnavailable(f"the records database {p} is not writable: {exc}") from None
+            raise
         finally:
             con.close()
 

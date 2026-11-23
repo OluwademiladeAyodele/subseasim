@@ -3,7 +3,7 @@
   "title": "Production 230XP22B",
   "subtitle": "Christmas tree workstation - layout traced from the reference control-system page",
   "width": 1643,
-  "height": 1071,
+  "height": 1092,
   "reference": {
     "source": "User-supplied photograph of a subsea control-system page 'Production 230XP22B without IWC' (810 x 1080 px).",
     "method": "Component centres and panel boxes measured in photo pixels, keystone-straightened (verticals made vertical, measured shear ~0.07 px/px), then scaled uniformly. Relative positions are preserved; text panels are enlarged slightly for legibility around the same anchor.",
@@ -1129,7 +1129,7 @@
         "instrument:PT-104",
         "instrument:TT-104"
       ],
-      "x": 572.0,
+      "x": 592.8,
       "y": 299.0,
       "w": 101.4,
       "h": 75.4,

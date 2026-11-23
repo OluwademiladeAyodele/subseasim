@@ -12,8 +12,10 @@ export function ConditionsPage() {
           : "In the steady model the operating point is recalculated immediately after each change."
       }
     >
-      <ConditionsPanel state={state} prefs={prefs} onBoundary={actions.boundary} onFluid={actions.fluid} onBlackOil={actions.blackOil}
-        onFluidModel={actions.fluidModel} />
+      <div className="max-w-3xl rounded-xl border border-line bg-panel shadow-[var(--shadow-card)]">
+        <ConditionsPanel state={state} prefs={prefs} onBoundary={actions.boundary} onFluid={actions.fluid} onBlackOil={actions.blackOil}
+          onFluidModel={actions.fluidModel} />
+      </div>
     </PageBody>
   );
 }

@@ -115,7 +115,7 @@ export function OverviewPage() {
           </div>
         }
         className="mt-4"
-        bodyClassName="flex"
+        bodyClassName="flex p-2"
       >
         {xt ? (
           <div className="mx-auto w-full max-w-[1600px]" style={{ aspectRatio: `${state.schematic!.width} / ${state.schematic!.height}` }}>

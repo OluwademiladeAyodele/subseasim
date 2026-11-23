@@ -364,7 +364,7 @@ components = [
     comp("NRV307", "check_valve", "element:NRV307", (455, 175), 270, flow_path="miv-dn"),
     comp("NRV304", "check_valve", "element:NRV304", (205, 356), 0, flow_path="chem-downhole"),
     # --- transmitter panels (reference positions)
-    panel("PTT-104", ["instrument:PT-104", "instrument:TT-104"], (240, 155, 279, 184), tap=(BORE, 164), flow_path="bore-cavity", group="tree"),
+    panel("PTT-104", ["instrument:PT-104", "instrument:TT-104"], (248, 155, 287, 184), tap=(BORE, 164), flow_path="bore-cavity", group="tree"),
     panel("PTT-107", ["instrument:PT-107", "instrument:TT-107"], (270, 104, 309, 133), tap=(289, WING), flow_path="wing", group="tree"),
     panel("PT-404", ["instrument:PT-404"], (105, 168, 144, 186), tap=(124, 196), flow_path="service-line", group="annulus"),
     panel("PDT-401", ["instrument:PDT-401"], (93, 211, 146, 223), group="annulus", note="Differential across SLV (assumed)."),
@@ -445,7 +445,7 @@ layout_doc = {
     "title": "Production 230XP22B",
     "subtitle": "Christmas tree workstation - layout traced from the reference control-system page",
     "width": round((652 - X0) * S),
-    "height": round((452 - Y0) * S),
+    "height": round((460 - Y0) * S),
     "reference": {
         "source": "User-supplied photograph of a subsea control-system page 'Production 230XP22B without IWC' (810 x 1080 px).",
         "method": "Component centres and panel boxes measured in photo pixels, keystone-straightened (verticals made vertical, "
@@ -501,6 +501,34 @@ training = {
     "briefing": ["Start Training > 'Exercise 7 - Integrated production, sand and choke health' to be guided step by step."],
 }
 
+# ---- tree-workstation training scenarios (single-phase, dynamic) -----------
+TRAINING_XT = {
+    "ex03_choke_operation": {
+        "name": "Exercise 3 - Choke operation (illustrative)",
+        "description": "Tree workstation, single-phase producer in the quasi-steady model with the production choke at 20 % opening. "
+                       "Used by training Exercise 3. All data ILLUSTRATIVE.",
+        "dynamics": {"mode": "steady"},
+        "element_overrides": {"CHOKE": {"initial_position_pct": 20}},
+        "briefing": ["Start Training > 'Exercise 3 - Choke operation' to be guided step by step."],
+    },
+    "training_startup": {
+        "name": "Training - well start-up from shut-in",
+        "description": "Tree workstation, single-phase producer fully SHUT IN (SCSSV, PMV, PWV closed; choke at 0 %). Used by "
+                       "Exercise 2. All data ILLUSTRATIVE.",
+        "element_overrides": {"SCSSV": {"initial_position_pct": 0}, "PMV": {"initial_position_pct": 0},
+                              "PWV": {"initial_position_pct": 0}, "CHOKE": {"initial_position_pct": 0}},
+        "briefing": ["Start Training > 'Exercise 2 - Well start-up from shut-in' to be guided step by step."],
+    },
+    "training_leaking_pmv": {
+        "name": "Training - PMV-101 leak test",
+        "description": "Tree workstation, single-phase producer; PMV-101 has a small seat leak (Cd.A 0.0001 mm2) to be found by an "
+                       "inflow test. Used by Exercise 8. All data ILLUSTRATIVE - acceptance limits are training values.",
+        "element_overrides": {"PMV": {"seat_leak_area_mm2": 0.0001}},
+        "briefing": ["Start Training > 'Exercise 8 - Leak test of the production master valve' to be guided step by step."],
+    },
+}
+
+
 if __name__ == "__main__":
     root = HERE.parent / "app" / "scenarios"
     (root / "layouts").mkdir(exist_ok=True)
@@ -510,6 +538,9 @@ if __name__ == "__main__":
         json.dump(multiphase, f, indent=2)
     with open(root / "data" / "training_integrated.json", "w", encoding="utf-8") as f:
         json.dump(training, f, indent=2)
+    for sid, extra in TRAINING_XT.items():
+        with open(root / "data" / f"{sid}.json", "w", encoding="utf-8") as f:
+            json.dump({"extends": "xt_230xp22b", "id": sid, **extra}, f, indent=2)
     with open(root / "layouts" / "xt_230xp22b.json", "w", encoding="utf-8") as f:
         json.dump(layout_doc, f, indent=2)
     print("written xt_230xp22b scenario + layout")

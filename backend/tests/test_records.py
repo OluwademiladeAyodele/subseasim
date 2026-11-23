@@ -125,3 +125,16 @@ def test_api_save_list_get_export_delete(tmp_db):
         assert client.post(f"/api/sessions/{sid}/records", json={"label": ""}).status_code == 422
         assert client.delete(f"/api/records/{rid}").status_code == 204
         assert client.get(f"/api/records/{rid}").status_code == 404
+
+
+def test_unwritable_storage_gives_a_clear_503(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    blocker = tmp_path / "not_a_folder"
+    blocker.write_text("x")  # a FILE where the records folder should be
+    monkeypatch.setenv("SUBSEASIM_DB_PATH", str(blocker / "records.sqlite"))
+    with TestClient(app) as client:
+        r = client.get("/api/records")
+        assert r.status_code == 503 and "Records storage unavailable" in r.json()["detail"]

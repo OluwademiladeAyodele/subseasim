@@ -164,6 +164,21 @@ Document: `SURROGATE_MODELS.md`. Test: `test_surrogates.py`.
 source (shown as leave-one-out R², RMSE and 95 % coverage). No CFD data are
 bundled.
 
+## 6c. Intern curriculum (operational behaviour on the tree workstation)
+
+Document: `TRAINING_CURRICULUM.md`. Test: `test_curriculum.py`.
+
+Every exercise is played to the end through the engine, and the pressure
+response it teaches is asserted:
+
+- start-up equalisation and the choke differential;
+- shut-in build-up and the trapped cavity, including column separation at
+  the bubble point;
+- chemical transport delay and the injection-rate dependence;
+- annulus bleed to the service line;
+- the leaking PMV fails, and a tight PMV passes, the same inflow test;
+- hydraulic fail-safe closure and A/B redundancy.
+
 ## 7. Integrated system test: Exercise 7
 
 Test: `test_training_integrated.py`. It plays the 14-stage integrated

@@ -4,14 +4,6 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import type { Simulation } from "@/hooks/useSimulation";
 import { ChemicalsPage } from "@/pages/ChemicalsPage";
 import { ConditionsPage } from "@/pages/ConditionsPage";
-import { ChokeHealthPage } from "@/pages/ChokeHealthPage";
-import { MPFMPage } from "@/pages/MPFMPage";
-import { SandInputsPage } from "@/pages/SandInputsPage";
-import { ComparisonPage } from "@/pages/ComparisonPage";
-import { RecordsPage } from "@/pages/RecordsPage";
-import { SurrogatesPage } from "@/pages/SurrogatesPage";
-import { SandPage } from "@/pages/SandPage";
-import { MultiphasePage } from "@/pages/MultiphasePage";
 import { DiagnosticsPage } from "@/pages/DiagnosticsPage";
 import { EventsPage } from "@/pages/EventsPage";
 import { InstrumentsPage } from "@/pages/InstrumentsPage";
@@ -33,6 +25,16 @@ const SIDEBAR_KEY = "subseasim.sidebar";
 
 // Charting library is only needed on the Trends workspace: load it on demand.
 const TrendsPage = lazy(() => import("@/pages/TrendsPage").then((m) => ({ default: m.TrendsPage })));
+// Specialist engineering workspaces load on demand: the operating pages (tree, valves, chemicals,
+// integrity, training) stay in the main bundle so the workstation opens fast.
+const MultiphasePage = lazy(() => import("@/pages/MultiphasePage").then((m) => ({ default: m.MultiphasePage })));
+const MPFMPage = lazy(() => import("@/pages/MPFMPage").then((m) => ({ default: m.MPFMPage })));
+const SandPage = lazy(() => import("@/pages/SandPage").then((m) => ({ default: m.SandPage })));
+const ChokeHealthPage = lazy(() => import("@/pages/ChokeHealthPage").then((m) => ({ default: m.ChokeHealthPage })));
+const SandInputsPage = lazy(() => import("@/pages/SandInputsPage").then((m) => ({ default: m.SandInputsPage })));
+const ComparisonPage = lazy(() => import("@/pages/ComparisonPage").then((m) => ({ default: m.ComparisonPage })));
+const SurrogatesPage = lazy(() => import("@/pages/SurrogatesPage").then((m) => ({ default: m.SurrogatesPage })));
+const RecordsPage = lazy(() => import("@/pages/RecordsPage").then((m) => ({ default: m.RecordsPage })));
 
 const PAGES: Record<RouteId, React.ComponentType> = {
   overview: OverviewPage,

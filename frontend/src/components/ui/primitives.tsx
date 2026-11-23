@@ -94,7 +94,7 @@ export function Panel({
           {right}
         </header>
       )}
-      <div className={cn("min-h-0 flex-1", bodyClassName)}>{children}</div>
+      <div className={cn("min-h-0 flex-1 p-4", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -258,7 +258,7 @@ export function Stat({
         onClick && "pressable cursor-pointer hover:border-line-strong",
       )}
     >
-      <div className="truncate text-xs font-medium text-dim">{label}</div>
+      <div className="stat-label line-clamp-2 text-xs font-medium leading-snug text-dim">{label}</div>
       <div className={cn("num mt-1 flex items-baseline gap-1.5 text-[26px] font-semibold leading-none tracking-[-0.02em]", color)}>
         {value}
         {unit && <span className="text-[13px] font-medium tracking-normal text-dim">{unit}</span>}
@@ -268,7 +268,7 @@ export function Stat({
           </span>
         )}
       </div>
-      {sub && <div className="mt-1.5 truncate text-xs text-dim">{sub}</div>}
+      {sub && <div className="stat-sub mt-1.5 line-clamp-2 text-xs leading-snug text-dim">{sub}</div>}
     </Comp>
   );
 }

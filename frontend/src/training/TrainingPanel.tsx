@@ -30,19 +30,29 @@ function H({ children }: { children: React.ReactNode }) {
 export function TrainingPanel({ training, exercises, onStart, onAnswer, onAdvance, onStop }: Props) {
   if (!training) {
     return (
-      <div className="space-y-3 p-3" data-testid="training-panel">
-        <p className="text-muted">Guided exercises load their own scenario and assess your understanding from the simulation results.</p>
-        {exercises.map((ex) => (
-          <div key={ex.id} className="rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow-card)]">
-            <div className="font-bold">{ex.title}</div>
-            <H>Learning objectives</H>
-            <List items={ex.objectives} />
-            <div className="mt-3 flex justify-end">
-              <Button variant="primary" size="sm" onClick={() => onStart(ex.id)} aria-label={`Start ${ex.title}`} data-testid={`start-${ex.id}`}>Start exercise</Button>
-            </div>
-          </div>
-        ))}
-        <p className="text-[12.5px] text-dim">Exercises 1, 2, 4–6 and 8–10 are planned (see docs/ROADMAP.md).</p>
+      <div className="p-4" data-testid="training-panel">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="t-heading">Intern curriculum</h2>
+          <p className="text-[12.5px] text-dim">Work through the exercises in order; each one loads its own scenario.</p>
+        </div>
+        <ol className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+          {[...exercises].sort((a, b) => a.number - b.number).map((ex) => (
+            <li key={ex.id} className="flex flex-col rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow-card)]" data-testid={`exercise-${ex.id}`}>
+              <div className="flex items-start gap-3">
+                <span className="num grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent/10 text-[14px] font-semibold text-accent" aria-hidden>{ex.number}</span>
+                <div className="min-w-0">
+                  <div className="font-semibold leading-snug">{ex.title.replace(/^Exercise \d+\s*-\s*/, "")}</div>
+                  <div className="text-[12px] text-dim">Exercise {ex.number} · {ex.step_count} steps</div>
+                </div>
+              </div>
+              <H>You will learn to</H>
+              <List items={ex.objectives} />
+              <div className="mt-auto flex justify-end pt-3">
+                <Button variant="primary" size="sm" onClick={() => onStart(ex.id)} aria-label={`Start ${ex.title}`} data-testid={`start-${ex.id}`}>Start exercise</Button>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
     );
   }
@@ -162,7 +172,7 @@ function ActiveExercise({ t, onAnswer, onAdvance, onStop }: { t: TrainingState; 
   );
 }
 
-function ReviewTable({ table }: { table: { columns: string[]; rows: (string | number)[][] } }) {
+function ReviewTable({ table }: { table: { columns: string[]; rows: (string | number)[][]; emphasis_rows?: number[] } }) {
   return (
     <table className="mt-2 w-full border-collapse text-[12.5px]">
       <thead>
@@ -176,7 +186,7 @@ function ReviewTable({ table }: { table: { columns: string[]; rows: (string | nu
       </thead>
       <tbody>
         {table.rows.map((r, i) => (
-          <tr key={i} className={i >= table.rows.length - 2 ? "font-bold" : ""}>
+          <tr key={i} className={table.emphasis_rows?.includes(i) ? "font-semibold" : ""}>
             {r.map((v, j) => (
               <td key={j} className={`border-b border-line/50 px-1 py-0.5 ${j ? "num text-right" : "text-muted"}`}>
                 {typeof v === "number" ? v.toFixed(1) : v}

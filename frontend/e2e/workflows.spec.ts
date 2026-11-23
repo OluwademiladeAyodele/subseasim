@@ -328,3 +328,29 @@ test("surrogate model: train on simulator cases, predict inside the envelope and
   await page.getByTestId("surrogate-predict").click();
   await expect(page.getByTestId("surrogate-envelope")).toContainText("Outside the training range");
 });
+
+test("intern curriculum: nine exercises; exercise 2 start-up is driven by real valve operations", async ({ page }) => {
+  test.setTimeout(150_000);
+  await nav(page, "Training");
+  for (const id of ["ex01_familiarisation", "ex02_startup", "ex03_choke_operation", "ex04_shutin", "ex05_chemicals", "ex06_annulus",
+    "ex07_integrated", "ex08_leaktest", "ex09_hydraulics"]) await expect(page.getByTestId(`exercise-${id}`)).toBeVisible();
+  await page.getByTestId("start-ex02_startup").click();
+  await expect(page.getByTestId("training-step-title")).toContainText("A shut-in subsea well");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByTestId("task-status")).toContainText("Task complete");
+  await page.getByRole("button", { name: "Continue" }).click();
+  // answer the start-up order question
+  await page.getByRole("radio", { name: /SCSSV, PMV, PWV, then crack the choke/ }).click();
+  await page.getByRole("button", { name: "Submit answer" }).click();
+  await expect(page.getByText("Correct", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByTestId("training-step-title")).toContainText("Open the SCSSV");
+  // operate the real valve from the Christmas tree
+  await page.getByRole("radiogroup", { name: "Simulation speed" }).getByRole("radio", { name: "60×" }).click();
+  await nav(page, "Christmas tree");
+  await page.getByTestId("valve-SCSSV-101").click();
+  await page.getByTestId("component-panel").getByRole("button", { name: /^open$/i }).click();
+  await nav(page, "Training");
+  await expect(page.getByTestId("task-status")).toContainText("Task complete", { timeout: 60_000 });
+});
