@@ -11,6 +11,8 @@ import { PageBody } from "@/app/PageBody";
 import { Badge, Button, Input, Panel, Select } from "@/components/ui/primitives";
 import type { SandChokeInputs } from "@/types/sand";
 
+import { MeasuredSandPanel } from "./MeasuredSandPanel";
+
 type Draft = SandChokeInputs;
 
 function NumField({ label, unit, value, onChange, hint, testId }: { label: string; unit?: string; value: number | null; onChange: (v: number | null) => void; hint?: string; testId?: string }) {
@@ -34,7 +36,7 @@ function NumField({ label, unit, value, onChange, hint, testId }: { label: strin
 
 function SelField<T extends string>({ label, value, options, onChange }: { label: string; value: T | null; options: [T, string][]; onChange: (v: T | null) => void }) {
   return (
-    <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+    <label className="grid grid-cols-[minmax(0,1fr)_minmax(180px,260px)] items-center gap-2 py-0.5">
       <span className="text-[13px] text-muted">{label}</span>
       <Select aria-label={label} value={value ?? ""} onChange={(e) => onChange((e.target.value || null) as T | null)}>
         <option value="">— not set —</option>
@@ -68,6 +70,8 @@ export function SandInputsPage() {
   useEffect(() => setD(saved ? structuredClone(saved) : null), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   const fileRef = useRef<HTMLInputElement>(null);
   const [cvText, setCvText] = useState("");
+  const [flText, setFlText] = useState("");
+  useEffect(() => setFlText((saved?.cavitation.fl_table ?? []).map((r) => `${r.opening_pct}, ${r.fl}`).join("\n")), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setCvText((saved?.choke.cv_table ?? []).map(([s, c]) => `${s}, ${c}`).join("\n")), [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d) return <PageBody><p className="text-dim">This scenario has no sand / choke model.</p></PageBody>;
   const status = state.sand_choke?.inputs_status;
@@ -79,7 +83,12 @@ export function SandInputsPage() {
 
   const save = () => {
     const rows = cvText.split(/\n/).map((l) => l.split(/[,;\t ]+/).filter(Boolean).map(Number)).filter((r) => r.length >= 2 && r.every(Number.isFinite));
-    actions.sandInputs({ ...d, choke: { ...d.choke, cv_table: rows.map((r) => [r[0], r[1]] as [number, number]) } });
+    const fl = flText.split(/\n/).map((l) => l.split(/[,;\t ]+/).filter(Boolean).map(Number)).filter((r) => r.length >= 2 && r.every(Number.isFinite));
+    actions.sandInputs({
+      ...d,
+      choke: { ...d.choke, cv_table: rows.map((r) => [r[0], r[1]] as [number, number]) },
+      cavitation: { ...d.cavitation, fl_table: fl.map((r) => ({ opening_pct: r[0], fl: r[1] })) },
+    });
   };
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
@@ -157,6 +166,11 @@ export function SandInputsPage() {
             <SelField label="Sand rate source" value={s.mode} onChange={(v) => v && set("sand", { mode: v })} options={[["predictive", "Predictive (geomechanics + calibrated coefficient)"], ["measured", "Measured / configured"]]} />
             {s.mode === "measured" ? (
               <>
+                {s.measurements.length > 0 && (
+                  <p className="mb-1 text-[12px] text-accent" data-testid="history-drives-model">
+                    The latest record of the measured sand history ({s.measurements.length} records) sets the rate; the value below is used only without a history.
+                  </p>
+                )}
                 <NumField label="Measured sand (at wellhead)" unit="" value={s.measured_value} onChange={(v) => set("sand", { measured_value: v })} />
                 <SelField label="Unit / basis" value={s.measured_unit} onChange={(v) => v && set("sand", { measured_unit: v })}
                   options={[["kg_d", "kg/day"], ["kg_h", "kg/h"], ["g_s", "g/s"], ["pptb", "pptb (lb per 1000 bbl liquid, std)"], ["ppm_mass_liquid", "ppm by mass of liquid"],
@@ -262,6 +276,36 @@ export function SandInputsPage() {
           <NumField label="Alarm threshold" unit="g/s" value={d.detector.alarm_threshold_g_s} onChange={(v) => v != null && set("detector", { alarm_threshold_g_s: v })} />
           <NumField label="Range" unit="g/s" value={d.detector.range_max_g_s} onChange={(v) => v != null && set("detector", { range_max_g_s: v })} />
         </Panel>
+
+        <Panel title="Erosional velocity (API RP 14E screening)" subtitle="Supplementary indicator for clean service; the DNV sand-erosion model governs.">
+          <NumField label="Empirical constant C" unit="-" value={d.erosional_velocity.c_factor} onChange={(v) => v != null && set("erosional_velocity", { c_factor: v })} testId="in-c-factor"
+            hint="API RP 14E: 100 continuous, 125 intermittent service (US units, solids-free). Reduce it for sand-laden flow per company practice." />
+          <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+            <span className="text-[13px] text-muted">Source of C</span>
+            <Input aria-label="Source of C" value={d.erosional_velocity.c_source ?? ""} onChange={(e) => set("erosional_velocity", { c_source: e.target.value || null })} />
+          </label>
+        </Panel>
+
+        <Panel title="Choke cavitation data (manufacturer / PVT)" subtitle="Screening only. Without FL and sigma limits only the outlet-pressure checks are made.">
+          <NumField label="FL, all openings" unit="-" value={d.cavitation.fl} onChange={(v) => set("cavitation", { fl: v })} testId="in-fl"
+            hint="Liquid pressure-recovery factor of the trim (IEC 60534-2-1). A table below overrides it." />
+          <h3 className="mb-1 mt-2 t-eyebrow">FL vs opening</h3>
+          <textarea aria-label="FL table" className="h-20 w-full rounded-md border border-line bg-panel p-2 font-mono text-[12px]" placeholder={"opening %, FL\n10, 0.95\n100, 0.85"}
+            value={flText} onChange={(e) => setFlText(e.target.value)} />
+          <NumField label="σ incipient cavitation" unit="-" value={d.cavitation.sigma_incipient} onChange={(v) => set("cavitation", { sigma_incipient: v })} testId="in-sigma-i" />
+          <NumField label="σ constant cavitation" unit="-" value={d.cavitation.sigma_constant} onChange={(v) => set("cavitation", { sigma_constant: v })} />
+          <NumField label="σ manufacturer damage limit" unit="-" value={d.cavitation.sigma_damage} onChange={(v) => set("cavitation", { sigma_damage: v })}
+            hint="σ = (P1 − Pv)/(P1 − P2). Limits must decrease: incipient > constant > damage." />
+          <NumField label="Bubble point (PVT report)" unit="bara" value={d.cavitation.bubble_point_bara} onChange={(v) => set("cavitation", { bubble_point_bara: v })}
+            hint="Empty: Standing correlation from the fluid inputs." />
+          <NumField label="Bubble-point sensitivity band" unit="%" value={d.cavitation.bubble_point_uncertainty_pct} onChange={(v) => v != null && set("cavitation", { bubble_point_uncertainty_pct: v })} />
+          <label className="grid grid-cols-[1fr_180px] items-center gap-2 py-0.5">
+            <span className="text-[13px] text-muted">Data source</span>
+            <Input aria-label="Cavitation data source" value={d.cavitation.threshold_source ?? ""} onChange={(e) => set("cavitation", { threshold_source: e.target.value || null })} />
+          </label>
+        </Panel>
+
+        <MeasuredSandPanel d={d} setD={setD} dirty={dirty} onImport={(csv, replace) => actions.sandCsv(csv, replace)} />
 
         <Panel title="Operating history (pre-loads wear)" className="xl:col-span-2" subtitle="Past periods since the trim was installed, e.g. monthly averages. Applied on save.">
           <div className="overflow-x-auto">

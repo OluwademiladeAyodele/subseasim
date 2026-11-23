@@ -19,10 +19,13 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.models.sand import SandChokeInputs
+from app.simulation.choke import cavitation as cav
 from app.simulation.multiphase.correlations import sachdeva_critical_ratio
 from app.simulation.multiphase.dynamic import SAND_CH
 from app.simulation.sand import erosion as er
+from app.simulation.sand import measurements as smeas
 from app.simulation.sand import production as sp
+from app.simulation.fluid_properties.black_oil import bubble_point
 
 S_PER_DAY = 86400.0
 S_PER_YEAR = 365.25 * S_PER_DAY
@@ -122,6 +125,8 @@ class SandChokeSystem:
     # ============================================================ inputs
     def apply_inputs(self, inputs: SandChokeInputs) -> None:
         self.inputs = inputs
+        # sand inputs as used by the model (latest measured record in measured mode)
+        self.sand_eff, self.driving_measurement = smeas.effective_sand(inputs.sand)
         e = self.engine
         self.choke = production_choke(e)
         configure_choke(self.choke, inputs)
@@ -339,11 +344,11 @@ class SandChokeSystem:
         q_liq_sc = op.w_in / float(bo.mass_per_liquid_sc(op.gor, op.wc)) if op.w_in > 0 else 0.0
         p = bo.params
         liq_mass = q_liq_sc * ((1 - op.wc) * p.rho_oil_sc + op.wc * p.rho_water_sc)
-        out = {"onset": onset, "mode": inp.sand.mode, "formation_kg_s": None, "produced_kg_s": None, "missing": [], "assumed": list(onset.assumed),
+        out = {"onset": onset, "mode": self.sand_eff.mode, "formation_kg_s": None, "produced_kg_s": None, "missing": [], "assumed": list(onset.assumed),
                "q_liquid_sc_m3s": q_liq_sc}
         f = self.screen.passing_fraction if self.screen.available else None
-        if inp.sand.mode == "measured":
-            m = sp.measured_rate_kg_s(inp.sand, q_liq_sc, liq_mass, op.w_in)
+        if self.sand_eff.mode == "measured":
+            m = sp.measured_rate_kg_s(self.sand_eff, q_liq_sc, liq_mass, op.w_in)
             if m is None:
                 out["missing"].append("measured sand value")
             else:
@@ -386,7 +391,7 @@ class SandChokeSystem:
         a_fl = math.pi * op.flowline_d**2 / 4
         return {"u_jet": u_jet, "critical": op.p2 / max(op.p1, 1.0) < yc, "y_crit": yc, "u_outlet": q_dn / a_out if a_out else None,
                 "u_gallery": q_up / a_gal if a_gal else None, "u_flowline": q_dn / a_fl, "rho_l": rho_l, "rho_g": rho_g, "x": x,
-                "rho_mix_dn": float(s2.rho_ns[0]), "v_sl_flowline": max(op.w_choke, 0.0) * (1 - x) / rho_l / a_fl}
+                "rho_mix_dn": float(s2.rho_ns[0]), "rho_mix_up": float(s1.rho_ns[0]), "v_sl_flowline": max(op.w_choke, 0.0) * (1 - x) / rho_l / a_fl}
 
     def _erode(self, op: OperatingPoint, m_sand: float, dt: float) -> dict:
         """Integrate wear over dt at a constant operating point; returns rates."""
@@ -461,7 +466,7 @@ class SandChokeSystem:
         self.cum["water_sm3"] += q_liq * op.wc * dt
         self.cum["gas_sm3"] += q_liq * (1 - op.wc) * op.gor * dt
         v = r["velocities"]
-        # XT3001 is on the choke outlet down-leg: outlet-bore velocity when the bore is known
+        # SDT-101 is on the choke outlet down-leg: outlet-bore velocity when the bore is known
         self._detector(m_det, v["u_outlet"] if v["u_outlet"] is not None else v["u_flowline"], dt)
         if self.service_s - self._last_log >= LOG_INTERVAL_S:
             self.log.add(self.service_s / S_PER_DAY, self.dd_base, self.plug_base, self.cum["choke_kg"], self.cum["liquid_sm3"])
@@ -550,6 +555,15 @@ class SandChokeSystem:
     def fast_forward(self, days: float) -> None:
         """Quasi-steady integration of wear and cumulative sand / production
         at the CURRENT operating point (training: months of service in seconds)."""
+        for _ in self.fast_forward_steps(days):
+            pass
+
+    def fast_forward_steps(self, days: float):
+        """Generator form of ``fast_forward``: one integration step (<= 1 day)
+        per ``next()``, yielding the days done. The operating point is frozen
+        at the start, so interleaving with the live simulation (background
+        job) gives the same result. Closing the generator early keeps the
+        days already integrated."""
         op = self.last_op or self.operating_point()
         if op is None:
             return
@@ -572,7 +586,8 @@ class SandChokeSystem:
             self.cum["water_sm3"] += q_liq * op.wc * dt
             self.cum["gas_sm3"] += q_liq * (1 - op.wc) * op.gor * dt
             self.log.add(self.service_s / S_PER_DAY, self.dd_base, self.plug_base, self.cum["choke_kg"], self.cum["liquid_sm3"])
-        self._last_log = self.service_s
+            self._last_log = self.service_s
+            yield dt / S_PER_DAY
         self._update_rates_only()
 
     # ============================================================ reporting
@@ -612,11 +627,61 @@ class SandChokeSystem:
     def _sigma_total(self, calibrated: bool) -> tuple[float, dict]:
         inp = self.inputs
         s_k = self.sigma_c if calibrated else SIGMA_K_PRIOR
-        s_sand = (inp.sand.measured_uncertainty_pct / 100.0) if inp.sand.mode == "measured" else SIGMA_SAND_PREDICTED
+        s_sand = (self.sand_eff.measured_uncertainty_pct / 100.0) if self.sand_eff.mode == "measured" else SIGMA_SAND_PREDICTED
         n = self.mat_trim.n if self.mat_trim else 2.6
         s_u = n * 0.05  # 5 % (1 sigma) on the jet velocity
         tot = math.sqrt(s_k**2 + s_sand**2 + s_u**2)
         return tot, {"erosion model (K, geometry)": s_k, "sand rate": s_sand, "particle velocity": s_u}
+
+    def measured_history(self) -> dict:
+        p = self.engine.bo.params
+        return smeas.report(self.inputs.sand, p.rho_oil_sc, p.rho_water_sc, p.rho_gas_sc, p.gor_sm3_sm3)
+
+    def erosional_velocity(self) -> dict:
+        """API RP 14E erosional-velocity screening at the gallery, the choke
+        outlet bore and the flowline (no-slip mixture velocity and density)."""
+        inp = self.inputs.erosional_velocity
+        v = (self.rates or {}).get("velocities")
+        op = self.last_op
+        if not v and op is not None and self.engine.bo is not None and self.choke is not None:
+            v = self._velocities(op)  # needs only the flow, not the erosion inputs
+        if not v:
+            return {"available": False, "reason": "needs a flowing three-phase operating point at the choke"}
+        rows = []
+        for key, label, u, rho, need in (
+            ("gallery", "Body gallery (upstream of the cage)", v.get("u_gallery"), v["rho_mix_up"], "gallery diameter"),
+            ("outlet", "Choke outlet bore", v.get("u_outlet"), v["rho_mix_dn"], "choke outlet bore"),
+            ("flowline", "Flowline", v.get("u_flowline"), v["rho_mix_dn"], None),
+        ):
+            if u is None:
+                rows.append({"key": key, "label": label, "available": False, "missing": need})
+                continue
+            ve = er.api14e_erosional_velocity(rho, inp.c_factor)
+            rows.append({"key": key, "label": label, "available": True, "u_mix_m_s": u, "rho_mix_kg_m3": rho,
+                         "ve_m_s": ve, "ratio": u / ve, "exceeded": u > ve})
+        sand = (self.rates or {}).get("m_sand_choke", 0.0) > 0
+        notes = ["Supplementary screening only: API RP 14E is an empirical velocity limit for clean service. It is NOT a "
+                 "sand-erosion model and NOT a choke-geometry model - the DNV-RP-O501 results above govern."]
+        if sand:
+            notes.append("Sand is present: API RP 14E itself says C must be reduced for solids-laden flow, so 'below Ve' does "
+                         "not mean erosion-free here.")
+        return {"available": True, "status": "Correlation-based screening (supplementary)", "c_factor": inp.c_factor,
+                "c_source": inp.c_source, "method": "Ve = C / sqrt(rho_m) (API RP 14E; ft/s, lb/ft3), no-slip mixture density "
+                "and velocity at each location", "locations": rows, "sand_present": sand,
+                "any_exceeded": any(r.get("exceeded") for r in rows), "notes": notes}
+
+    def cavitation(self, op: OperatingPoint | None = None) -> dict:
+        """Cavitation / flashing screening at the current choke operating point."""
+        op = op or self.last_op or self.operating_point()
+        bo = self.engine.bo
+        if op is None or bo is None:
+            return {"available": False, "reason": "needs a flowing three-phase (black-oil) operating point at the choke"}
+        p = bo.params
+        st = bo.state(op.p1, op.t1, op.gor_choke, op.wc_choke)
+        pt = cav.CavitationPoint(p1=op.p1, p2=op.p2, t1=op.t1, opening_pct=op.position_pct,
+                                 pb_correlation=float(bubble_point(op.gor_choke, op.t1, p.api, p.gas_sg)),
+                                 gvf_inlet=float(st.gvf[0]), water_cut=op.wc_choke)
+        return cav.screen(pt, self.inputs.cavitation)
 
     def snapshot(self) -> dict:
         inp = self.inputs
@@ -657,6 +722,9 @@ class SandChokeSystem:
             "available": self.choke is not None,
             "service_days": days,
             "inputs_status": self.input_status(),
+            "cavitation": self.cavitation(op),
+            "erosional_velocity": self.erosional_velocity(),
+            "measured_history": self.measured_history(),
             "sand": None if not src else {
                 "mode": src["mode"],
                 "formation_kg_d": None if src["formation_kg_s"] is None else src["formation_kg_s"] * S_PER_DAY,
@@ -684,7 +752,7 @@ class SandChokeSystem:
                          "alarm": self.det["alarm"], "alarm_threshold_g_s": inp.detector.alarm_threshold_g_s,
                          "velocity_m_s": self.det.get("velocity_m_s"), "cumulative_measured_kg": self.cum["detector_meas_kg"],
                          "uncertainty_pct": 2 * inp.detector.calibration_uncertainty_pct,
-                         "location": "choke outlet (downstream of PCV)"},
+                         "location": "choke outlet (downstream of CHK-101)"},
             "transport": self._transport_report(),
             "velocities": None if not r else {k: v for k, v in r["velocities"].items() if not isinstance(v, bool)} | {"critical_flow": r["velocities"]["critical"]},
             "erosion": None if not r else {
@@ -802,7 +870,7 @@ class SandChokeSystem:
         factors = []
         if self.mat_trim is None or not self.geom.valid:
             return {"category": "unavailable", "factors": ["trim material and cage geometry are required"]}
-        sand_measured = inp.sand.mode == "measured" and inp.sand.measured_value is not None
+        sand_measured = self.sand_eff.mode == "measured" and self.sand_eff.measured_value is not None
         factors.append("sand rate MEASURED" if sand_measured else "sand rate PREDICTED (empirical, needs calibration)")
         factors.append(f"trim erosion model calibrated by {n_cal} inspection(s)" if n_cal else "trim erosion model NOT calibrated by inspection")
         if self.mat_trim.source.startswith("DNV"):
@@ -844,7 +912,7 @@ class SandChokeSystem:
                        + ("SIGNIFICANT" if cvt["significant"] else "not significant"))
         actions = {
             "Normal": ["continue monitoring sand and Cv tracking"],
-            "Elevated erosion risk": ["consider reducing drawdown / choke differential", "confirm sand rate with the detector or a sand trap"],
+            "Elevated erosion risk": ["consider reducing drawdown / choke differential", "confirm the sand rate with SDT-101 or a sand trap"],
             "Increased wear": ["schedule an inspection opportunity", "trend Cv tracking", "review vendor erosion limits"],
             "Inspection recommended": ["plan inspection of cage holes and plug", "review vendor limits and inspection evidence",
                                        "record the inspection to calibrate the model"],
@@ -859,7 +927,7 @@ class SandChokeSystem:
 
     def input_status(self) -> dict:
         inp = self.inputs
-        g, c, s, ch, a = inp.geomechanics, inp.completion, inp.sand, inp.choke, inp.acceptance
+        g, c, s, ch, a = inp.geomechanics, inp.completion, self.sand_eff, inp.choke, inp.acceptance
 
         def sect(req: list[tuple[str, object]]) -> dict:
             miss = [n for n, v in req if v in (None, [], "")]

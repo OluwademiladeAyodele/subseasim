@@ -67,6 +67,35 @@ class MPFMFaultRequest(_Req):
     pt_failed: bool | None = None
 
 
+class JobRequest(_Req):
+    kind: Annotated[str, Field(min_length=1, max_length=64)]
+    params: dict = Field(default_factory=dict)
+
+
+class SurrogatePredictRequest(_Req):
+    inputs: dict[str, float]
+
+
+class SurrogateImportRequest(_Req):
+    name: Annotated[str, Field(min_length=1, max_length=80)]
+    method: Literal["gp", "poly"] = "gp"
+    inputs: Annotated[list[str], Field(min_length=1, max_length=7)]
+    outputs: Annotated[list[str], Field(min_length=1, max_length=9)]
+    csv: str = Field(max_length=2_000_000)
+
+
+class RecordRequest(_Req):
+    label: Annotated[str, Field(min_length=1, max_length=120)]
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+    #: Attach the result of a completed scenario-comparison job of this session.
+    comparison_job_id: Annotated[str, Field(max_length=64)] | None = None
+
+
+class SandCsvRequest(_Req):
+    csv: str = Field(max_length=2_000_000)
+    replace: bool = False
+
+
 class FastForwardRequest(_Req):
     days: Annotated[float, Field(gt=0, le=3650)]
 

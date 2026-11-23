@@ -2,7 +2,7 @@
   "extends": "base_single_phase",
   "id": "xt_230xp22b",
   "name": "XT workstation - Production 230XP22B layout (illustrative)",
-  "description": "Dynamic subsea producer arranged as on the reference control-system page 'Production 230XP22B': production bore with SCSSV, PMV and the production wing (PWV) ending in the production choke PCV3006; A-annulus with AMV, AWV, crossover XOV into the tree cavity and the annulus service line valve SLV; chemical injection into the production wing; two methanol injection valves either side of PWV; downhole chemical injection; SCM A/B hydraulic headers with selector valves (fail-safe closure on loss of supply). The photograph defines the ARCHITECTURE only: every reading is calculated by the simulator from the configured reservoir, fluid, boundary and valve inputs. All data are ILLUSTRATIVE training values.",
+  "description": "Dynamic subsea producer arranged as on the reference control-system page 'Production 230XP22B': production bore with SCSSV, PMV and the production wing (PWV) ending in the production choke CHK-101; A-annulus with AMV, AWV, crossover XOV into the tree cavity and the annulus service line valve SLV; chemical injection into the production wing; two methanol injection valves either side of PWV; downhole chemical injection; SCM A/B hydraulic headers with selector valves (fail-safe closure on loss of supply). The photograph defines the ARCHITECTURE only: every reading is calculated by the simulator from the configured reservoir, fluid, boundary and valve inputs. All data are ILLUSTRATIVE training values.",
   "nodes": [
     {
       "id": "RES",
@@ -339,13 +339,13 @@
       },
       {
         "id": "N_MIV1_A",
-        "name": "Methanol: downstream of MIV3015",
+        "name": "Methanol: downstream of MIV-302",
         "elevation_m": -1195,
         "zone": "methanol"
       },
       {
         "id": "N_MIV2_A",
-        "name": "Methanol: downstream of MIV3016",
+        "name": "Methanol: downstream of MIV-303",
         "elevation_m": -1195,
         "zone": "methanol"
       }
@@ -1035,7 +1035,7 @@
       {
         "tag": "TT-104",
         "type": "temperature",
-        "description": "Tree cavity temperature (PTT3005)",
+        "description": "Tree cavity temperature",
         "node": "N_PMV_PWV",
         "range_min": 0,
         "range_max": 150
@@ -1043,7 +1043,7 @@
       {
         "tag": "PT-107",
         "type": "pressure",
-        "description": "Production wing pressure upstream of PWV (PTT3004)",
+        "description": "Production wing pressure upstream of PWV",
         "node": "N_PMV_PWV",
         "range_min": 0,
         "range_max": 690
@@ -1051,7 +1051,7 @@
       {
         "tag": "TT-107",
         "type": "temperature",
-        "description": "Production wing temperature upstream of PWV (PTT3004)",
+        "description": "Production wing temperature upstream of PWV",
         "node": "N_PMV_PWV",
         "range_min": 0,
         "range_max": 150
@@ -1059,7 +1059,7 @@
       {
         "tag": "PT-002",
         "type": "pressure",
-        "description": "Downhole gauge B pressure (PTT3003)",
+        "description": "Downhole gauge B pressure",
         "node": "N_BH",
         "range_min": 0,
         "range_max": 690
@@ -1067,7 +1067,7 @@
       {
         "tag": "TT-002",
         "type": "temperature",
-        "description": "Downhole gauge B temperature (PTT3003)",
+        "description": "Downhole gauge B temperature",
         "node": "N_BH",
         "range_min": 0,
         "range_max": 150
@@ -1075,7 +1075,7 @@
       {
         "tag": "PT-106",
         "type": "pressure",
-        "description": "Production line pressure downstream of choke, 30 m (PTT3009)",
+        "description": "Production line pressure downstream of choke, 30 m",
         "element": "FL-101",
         "distance_m": 30,
         "range_min": 0,
@@ -1084,7 +1084,7 @@
       {
         "tag": "TT-106",
         "type": "temperature",
-        "description": "Production line temperature downstream of choke, 30 m (PTT3009)",
+        "description": "Production line temperature downstream of choke, 30 m",
         "element": "FL-101",
         "distance_m": 30,
         "range_min": 0,
@@ -1093,7 +1093,7 @@
       {
         "tag": "PT-404",
         "type": "pressure",
-        "description": "Annulus service-line junction pressure, upstream of SLV (PT3014)",
+        "description": "Annulus service-line junction pressure, upstream of SLV",
         "node": "N_ANN_SVC",
         "range_min": 0,
         "range_max": 690
@@ -1101,7 +1101,7 @@
       {
         "tag": "PDT-401",
         "type": "differential_pressure",
-        "description": "Differential pressure across the service line valve SLV (PD3014)",
+        "description": "Differential pressure across the service line valve SLV",
         "high_node": "N_ANN_SVC",
         "low_node": "N_SVC_L",
         "range_min": -350,
@@ -1110,7 +1110,7 @@
       {
         "tag": "FT-306",
         "type": "flow",
-        "description": "Methanol flow through MIV3015 (wing, upstream of PWV)",
+        "description": "Methanol flow through MIV-302 (wing, upstream of PWV)",
         "element": "MIV302",
         "range_min": 0,
         "range_max": 120
@@ -1118,7 +1118,7 @@
       {
         "tag": "FT-307",
         "type": "flow",
-        "description": "Methanol flow through MIV3016 (between PWV and choke)",
+        "description": "Methanol flow through MIV-303 (between PWV and choke)",
         "element": "MIV303",
         "range_min": 0,
         "range_max": 120
@@ -1150,7 +1150,7 @@
       "routes": [
         {
           "id": "miv_up",
-          "name": "MIV3015 - production wing upstream of PWV",
+          "name": "MIV-302 - production wing upstream of PWV",
           "supply_node": "SUP_MEOH_MIV",
           "valve": "MIV-302",
           "check_valve": "NRV-306",
@@ -1159,7 +1159,7 @@
         },
         {
           "id": "miv_dn",
-          "name": "MIV3016 - between PWV and the production choke",
+          "name": "MIV-303 - between PWV and the production choke",
           "supply_node": "SUP_MEOH_MIV",
           "valve": "MIV-303",
           "check_valve": "NRV-307",
@@ -1303,11 +1303,11 @@
     }
   ],
   "briefing": [
-    "This page reproduces the reference control-system layout 'Production 230XP22B'. Tags are the reference numbers; open a component to see its SubseaSim engineering tag.",
+    "This page follows the arrangement of the reference control-system page 'Production 230XP22B', with SubseaSim engineering tags.",
     "Every reading is calculated by the simulator from the inputs on the Conditions page (reservoir pressure, temperature, productivity, fluid, downstream pressure) and the valve positions - change them and watch the transmitters respond.",
-    "Try closing PWV3005: the tree cavity (PTT3005 / PTT3004) builds toward shut-in pressure while the choke outlet (PTT3008 / PTT3009) falls toward flowline pressure.",
-    "Selector valves route the LP and HP hydraulic supplies to SCM A and B. Close both LP selector valves and watch LP3096 / LP3097 bleed down until the fail-safe valves close.",
-    "Open MIV3015 (upstream of PWV) or MIV3016 (between PWV and the choke) to inject methanol into the production stream; the concentration is tracked downstream."
+    "Try closing PWV-101: the tree cavity (PTT-104 / PTT-107) builds toward shut-in pressure while the choke outlet (PTT-103 / PTT-106) falls toward flowline pressure.",
+    "Selector valves route the LP and HP hydraulic supplies to SCM A and B. Close both LP selector valves and watch PT-611 / PT-612 bleed down until the fail-safe valves close.",
+    "Open MIV-302 (upstream of PWV) or MIV-303 (between PWV and the choke) to inject methanol into the production stream; the concentration is tracked downstream."
   ],
   "layout": {
     "width": 1440,
@@ -1771,14 +1771,14 @@
       {
         "id": "LP",
         "name": "LP",
-        "tag": "PT-HYD-LP",
+        "tag": "PT-601",
         "pressure_bara": 207,
         "minimum_operating_pressure_bara": 110
       },
       {
         "id": "HP",
         "name": "HP",
-        "tag": "PT-HYD-HP",
+        "tag": "PT-602",
         "pressure_bara": 517,
         "minimum_operating_pressure_bara": 300
       }
@@ -1787,50 +1787,50 @@
       {
         "id": "LP-A",
         "name": "LP header SCM A",
-        "tag": "PT-HYD-LPA",
+        "tag": "PT-611",
         "supply": "LP",
         "scm": "A"
       },
       {
         "id": "LP-B",
         "name": "LP header SCM B",
-        "tag": "PT-HYD-LPB",
+        "tag": "PT-612",
         "supply": "LP",
         "scm": "B"
       },
       {
         "id": "HP-A",
         "name": "HP header SCM A",
-        "tag": "PT-HYD-HPA",
+        "tag": "PT-621",
         "supply": "HP",
         "scm": "A"
       },
       {
         "id": "HP-B",
         "name": "HP header SCM B",
-        "tag": "PT-HYD-HPB",
+        "tag": "PT-622",
         "supply": "HP",
         "scm": "B"
       }
     ],
     "selector_valves": [
       {
-        "tag": "SEL-LP-A",
+        "tag": "HSV-101",
         "name": "LP selector valve to SCM A",
         "header": "LP-A"
       },
       {
-        "tag": "SEL-LP-B",
+        "tag": "HSV-102",
         "name": "LP selector valve to SCM B",
         "header": "LP-B"
       },
       {
-        "tag": "SEL-HP-A",
+        "tag": "HSV-103",
         "name": "HP selector valve to SCM A",
         "header": "HP-A"
       },
       {
-        "tag": "SEL-HP-B",
+        "tag": "HSV-104",
         "name": "HP selector valve to SCM B",
         "header": "HP-B"
       }
@@ -1903,7 +1903,7 @@
       "erosion_feedback": true
     },
     "detector": {
-      "tag": "XT3001"
+      "tag": "SDT-101"
     }
   },
   "sand_choke_example": {
@@ -1941,7 +1941,28 @@
       "measured_unit": "kg_d"
     },
     "detector": {
-      "tag": "XT3001"
+      "tag": "SDT-101"
+    },
+    "cavitation": {
+      "fl_table": [
+        {
+          "opening_pct": 10,
+          "fl": 0.95
+        },
+        {
+          "opening_pct": 50,
+          "fl": 0.9
+        },
+        {
+          "opening_pct": 100,
+          "fl": 0.85
+        }
+      ],
+      "fl_source": "ILLUSTRATIVE - replace with the manufacturer's FL for this trim",
+      "sigma_incipient": 2.0,
+      "sigma_constant": 1.7,
+      "sigma_damage": 1.4,
+      "threshold_source": "ILLUSTRATIVE - replace with the manufacturer's sigma limits for this trim"
     },
     "choke": {
       "design": "plug_and_cage",
@@ -2008,231 +2029,5 @@
       "reference_step": 82
     }
   },
-  "tag_aliases": {
-    "AWV-101": {
-      "tag": "AWV3034",
-      "status": "verified",
-      "note": ""
-    },
-    "AMV-101": {
-      "tag": "AMV3030",
-      "status": "verified",
-      "note": ""
-    },
-    "PMV-101": {
-      "tag": "PMV3004",
-      "status": "verified",
-      "note": ""
-    },
-    "PWV-101": {
-      "tag": "PWV3005",
-      "status": "verified",
-      "note": ""
-    },
-    "SCSSV-101": {
-      "tag": "SCSSV3003",
-      "status": "verified",
-      "note": ""
-    },
-    "CHK-101": {
-      "tag": "PCV3006",
-      "status": "verified",
-      "note": ""
-    },
-    "XOV-101": {
-      "tag": "XOV3032",
-      "status": "verified",
-      "note": ""
-    },
-    "SLV-101": {
-      "tag": "SLV3035",
-      "status": "verified",
-      "note": ""
-    },
-    "CIV-302": {
-      "tag": "CIV3027",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIMV-302": {
-      "tag": "CCV3026",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIV-303": {
-      "tag": "CIV3025",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIV-301": {
-      "tag": "CIV3023",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIMV-301": {
-      "tag": "CCV3022",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "MIV-302": {
-      "tag": "MIV3015",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "MIV-303": {
-      "tag": "MIV3016",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIV-304": {
-      "tag": "CIV3021",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "CIMV-304": {
-      "tag": "CCV3036",
-      "status": "uncertain",
-      "note": "Partly legible on the reference."
-    },
-    "SV-101": {
-      "tag": "SV-101",
-      "status": "addition",
-      "note": "Swab valve: SubseaSim addition, not drawn on the reference page."
-    },
-    "CIMV-303": {
-      "tag": "CIMV-303",
-      "status": "addition",
-      "note": "Metering valve not drawn on the reference page for this line."
-    },
-    "PT-104": {
-      "tag": "PT3005",
-      "status": "verified",
-      "note": "Panel PTT3005."
-    },
-    "TT-104": {
-      "tag": "TT3005",
-      "status": "verified",
-      "note": "Panel PTT3005."
-    },
-    "PT-107": {
-      "tag": "PT3004",
-      "status": "verified",
-      "note": "Panel PTT3004."
-    },
-    "TT-107": {
-      "tag": "TT3004",
-      "status": "verified",
-      "note": "Panel PTT3004."
-    },
-    "PT-001": {
-      "tag": "PT3002",
-      "status": "verified",
-      "note": "Panel PTT3002 (downhole gauge A)."
-    },
-    "TT-001": {
-      "tag": "TT3002",
-      "status": "verified",
-      "note": "Panel PTT3002 (downhole gauge A)."
-    },
-    "PT-002": {
-      "tag": "PT3003",
-      "status": "verified",
-      "note": "Panel PTT3003 (downhole gauge B)."
-    },
-    "TT-002": {
-      "tag": "TT3003",
-      "status": "verified",
-      "note": "Panel PTT3003 (downhole gauge B)."
-    },
-    "PT-103": {
-      "tag": "PT3008",
-      "status": "verified",
-      "note": "Panel PTT3008."
-    },
-    "TT-103": {
-      "tag": "TT3008",
-      "status": "verified",
-      "note": "Panel PTT3008."
-    },
-    "PT-106": {
-      "tag": "PT3009",
-      "status": "verified",
-      "note": "Panel PTT3009."
-    },
-    "TT-106": {
-      "tag": "TT3009",
-      "status": "verified",
-      "note": "Panel PTT3009."
-    },
-    "PT-402": {
-      "tag": "PT3030",
-      "status": "verified",
-      "note": ""
-    },
-    "PT-401": {
-      "tag": "PT3031",
-      "status": "uncertain",
-      "note": "Reads PT3031 or PT3011 on the reference; tap drawn above AMV, modelled on the A-annulus below AMV."
-    },
-    "PT-404": {
-      "tag": "PT3014",
-      "status": "verified",
-      "note": ""
-    },
-    "PDT-401": {
-      "tag": "PD3014",
-      "status": "verified",
-      "note": "Measured across SLV (assumed from its position on the reference)."
-    },
-    "PT-HYD-LP": {
-      "tag": "LPHP1",
-      "status": "uncertain",
-      "note": "Supply pressure panel; label partly legible."
-    },
-    "PT-HYD-HP": {
-      "tag": "HPHP1",
-      "status": "uncertain",
-      "note": "Supply pressure panel; label partly legible."
-    },
-    "PT-HYD-LPA": {
-      "tag": "LP3096",
-      "status": "uncertain",
-      "note": "Partly legible."
-    },
-    "PT-HYD-LPB": {
-      "tag": "LP3097",
-      "status": "uncertain",
-      "note": "Partly legible."
-    },
-    "PT-HYD-HPA": {
-      "tag": "HP3098",
-      "status": "uncertain",
-      "note": "Partly legible."
-    },
-    "PT-HYD-HPB": {
-      "tag": "HP3099",
-      "status": "uncertain",
-      "note": "Partly legible."
-    },
-    "SEL-LP-A": {
-      "tag": "SEL-LP-A",
-      "status": "placeholder",
-      "note": "Selector valves carry no tag on the reference page."
-    },
-    "SEL-LP-B": {
-      "tag": "SEL-LP-B",
-      "status": "placeholder",
-      "note": "Selector valves carry no tag on the reference page."
-    },
-    "SEL-HP-A": {
-      "tag": "SEL-HP-A",
-      "status": "placeholder",
-      "note": "Selector valves carry no tag on the reference page."
-    },
-    "SEL-HP-B": {
-      "tag": "SEL-HP-B",
-      "status": "placeholder",
-      "note": "Selector valves carry no tag on the reference page."
-    }
-  }
+  "tag_aliases": {}
 }

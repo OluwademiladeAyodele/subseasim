@@ -62,7 +62,7 @@ export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationS
               : nodeName(i.node);
         return (
           <tr key={i.tag} className="cursor-pointer hover:bg-panel-3/60" onClick={() => onSelect?.(i.tag)} data-testid={`row-${i.tag}`}>
-            <td className={`${td} num font-bold`} title={i.tag}>
+            <td className={`${td} num whitespace-nowrap font-bold`} title={i.tag}>
               {displayTag(state, i.tag)}
               {displayTag(state, i.tag) !== i.tag && <span className="ml-1 text-[11px] font-normal text-dim">{i.tag}</span>}
             </td>
@@ -70,7 +70,7 @@ export function InstrumentTable({ state, prefs, onSelect }: { state: SimulationS
             <td className={`${td} text-muted`}>{loc}</td>
             <td className={`${td} num text-right text-[13px] text-fg`}>{fmt(d.value, d.digits)}</td>
             <td className={`${td} text-dim`}>{d.unit}</td>
-            <td className={`${td} num text-right text-dim`}>
+            <td className={`${td} num whitespace-nowrap text-right text-dim`}>
               {fmt(lo.value, 0)}–{fmt(hi.value, 0)}
             </td>
             <td className={td}>

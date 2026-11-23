@@ -28,6 +28,10 @@ log = logging.getLogger("subseasim.sessions")
 
 #: Max wall-clock interval credited in one tick (protects against stalls).
 MAX_TICK_CREDIT_FACTOR = 4.0
+#: Share of each tick period that the running sessions may spend computing;
+#: the rest keeps the server responsive (WebSocket pushes, API commands).
+COMPUTE_SHARE = 0.6
+MIN_SESSION_BUDGET_S = 0.03
 
 
 class SessionLimitReached(RuntimeError):
@@ -145,6 +149,8 @@ class SessionManager:
         reported honestly."""
         real = real_wall_s if real_wall_s is not None else elapsed_wall_s
         now = time.monotonic()
+        n_running = sum(1 for x in self.sessions.values() if x.engine.status == "running")
+        budget = max(MIN_SESSION_BUDGET_S, COMPUTE_SHARE * self.settings.tick_period_s / max(1, n_running))
         for s in list(self.sessions.values()):
             if s.sockets:
                 s.last_watched = now
@@ -157,7 +163,7 @@ class SessionManager:
                 )
             if s.engine.status == "running":
                 t0 = s.engine.time_s
-                s.engine.advance(elapsed_wall_s * s.engine.time_scale)
+                s.engine.advance(elapsed_wall_s * s.engine.time_scale, wall_budget_s=budget)
                 if real > 0:
                     inst = (s.engine.time_s - t0) / real
                     prev = s.engine.achieved_speed

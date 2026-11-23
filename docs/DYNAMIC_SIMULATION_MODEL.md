@@ -80,6 +80,7 @@ The dynamic state is initialised from the steady operating point of the scenario
 | Wellbore storage + reservoir transient | Wellbore compliance + radial diffusion grid |
 | Flow resistance, restrictions | Churchill friction; orifice law with valve characteristic |
 | Thermal expansion of trapped liquid | Source `V β dT/dt` in the node balance |
+| Column separation (trapped liquid contracting) | Pressure floor at the bubble point (production) or 1 bara (other lines); the volume deficit is carried as a gas / vapour void that inflowing liquid refills first (`DynamicModel._column_separation`, warning `COLUMN_SEPARATION`) |
 | Chemical injection into the production line | Injection-circuit network discharging through a check valve into a production node |
 | Chemical transport and mixing | Finite-volume advection by the calculated flows |
 | Thermal mixing, heat loss, throttling | Energy equation on the transport grid |

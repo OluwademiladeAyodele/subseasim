@@ -6,6 +6,33 @@ export interface HoleRow {
   count: number;
 }
 
+export type MeasuredUnit = "kg_h" | "kg_d" | "g_s" | "pptb" | "ppm_mass_liquid" | "ppm_mass_total" | "ppm_vol_liquid";
+
+export interface SandMeasurement {
+  timestamp: string;
+  value: number;
+  unit: MeasuredUnit;
+  method: "sand_trap" | "acoustic_detector" | "intrusive_probe" | "well_test_sample" | "other";
+  uncertainty_pct: number | null;
+  liquid_rate_sm3_d: number | null;
+  water_cut: number | null;
+  d10_um: number | null;
+  d50_um: number | null;
+  d90_um: number | null;
+  note: string | null;
+}
+
+export interface MeasuredHistory {
+  count: number;
+  mode: string;
+  drives_model: boolean;
+  driving_record: { timestamp: string; value: number; unit_label: string; method: string } | null;
+  series: { timestamp: string; value: number; unit: MeasuredUnit; unit_label: string; method: string; uncertainty_pct: number | null; kg_d: number | null; note: string | null; d50_um: number | null }[];
+  abnormal: { flag: boolean; available: boolean; ratio: number | null; baseline_kg_d: number | null; latest_kg_d: number | null; latest_timestamp?: string; trigger_ratio: number; baseline_count: number; min_increase_kg_d: number | null; text: string };
+  notes: string[];
+  trigger_note: string;
+}
+
 export interface SandChokeInputs {
   geomechanics: {
     depth_tvd_m: number | null;
@@ -42,6 +69,10 @@ export interface SandChokeInputs {
     measured_value: number | null;
     measured_unit: "kg_h" | "kg_d" | "g_s" | "pptb" | "ppm_mass_liquid" | "ppm_mass_total" | "ppm_vol_liquid";
     measured_uncertainty_pct: number;
+    measurements: SandMeasurement[];
+    abnormal_increase_ratio: number;
+    abnormal_baseline_count: number;
+    abnormal_min_increase_kg_d: number | null;
     rate_coefficient_kg_m3: number | null;
     rate_exponent: number;
   };
@@ -54,6 +85,18 @@ export interface SandChokeInputs {
     alarm_threshold_g_s: number;
     range_max_g_s: number;
   };
+  cavitation: {
+    fl: number | null;
+    fl_table: { opening_pct: number; fl: number }[];
+    fl_source: string | null;
+    sigma_incipient: number | null;
+    sigma_constant: number | null;
+    sigma_damage: number | null;
+    threshold_source: string | null;
+    bubble_point_bara: number | null;
+    bubble_point_uncertainty_pct: number;
+  };
+  erosional_velocity: { c_factor: number; c_source: string | null };
   choke: {
     design: "plug_and_cage" | "external_sleeve" | "needle_and_seat" | "other";
     model_label: string | null;
@@ -141,10 +184,60 @@ export interface WearCriterion {
   calibrated_by_inspection: boolean;
 }
 
+export interface CavitationPhase {
+  regime: string;
+  text: string;
+  sigma: number | null;
+}
+
+export interface CavitationResult {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  method?: string;
+  p1_bara?: number;
+  p2_bara?: number;
+  dp_bar?: number;
+  t_c?: number;
+  opening_pct?: number;
+  fl?: number | null;
+  fl_source?: string | null;
+  vena_contracta_bara?: number | null;
+  inlet_free_gas?: boolean;
+  gvf_inlet?: number;
+  oil?: CavitationPhase & { pb_bara: number; pb_source: string };
+  water?: (CavitationPhase & { pv_bara: number; ff: number; dp_choked_bar: number | null; choked: boolean | null; level: string }) | null;
+  regime?: string;
+  risk?: string;
+  limits?: { sigma_incipient: number | null; sigma_constant: number | null; sigma_damage: number | null; source: string | null };
+  damage_locations?: string[];
+  sensitivity?: { pb_low_bara: number; pb_high_bara: number; outlet_below_pb_low: boolean; outlet_below_pb_high: boolean; note: string } | null;
+  missing?: string[];
+  assumed?: string[];
+  notes?: string[];
+  limitations?: string[];
+}
+
+export interface ErosionalVelocityResult {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  c_factor?: number;
+  c_source?: string | null;
+  method?: string;
+  sand_present?: boolean;
+  any_exceeded?: boolean;
+  notes?: string[];
+  locations?: { key: string; label: string; available: boolean; missing?: string; u_mix_m_s?: number; rho_mix_kg_m3?: number; ve_m_s?: number; ratio?: number; exceeded?: boolean }[];
+}
+
 export interface SandChokeResults {
   available: boolean;
   reason?: string;
   service_days?: number;
+  cavitation?: CavitationResult;
+  erosional_velocity?: ErosionalVelocityResult;
+  measured_history?: MeasuredHistory;
   inputs_status?: Record<string, { complete: boolean; missing: string[] }>;
   sand?: {
     mode: string;

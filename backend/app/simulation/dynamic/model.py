@@ -37,6 +37,9 @@ from app.simulation.hydraulics.network import HydraulicResult
 from app.simulation.inflow.ipr import LinearIPR
 from app.simulation.instruments.instruments import Instrument, Reading, classify
 
+#: Lowest pressure a non-gassy trapped liquid can reach before a vapour void forms [Pa abs].
+P_VAPOUR_FLOOR = 1.0e5
+
 #: Flow below which a link is reported as "no flow" [m3/s] (~0.0009 m3/d).
 NO_FLOW_M3S = 1e-8
 #: Injection below this is reported as "no injection" (3.6 mL/h).
@@ -300,6 +303,12 @@ class DynamicModel:
             self.mp.update(force=True)
             self.mp.initialise_content()
         self.S = np.zeros(net.n)
+        # column separation: minimum pressure per node and the vapour / gas void
+        # volume [m3] formed where trapped liquid contracted below it
+        zones = [nd.zone for nd in net.nodes]
+        self.p_floor = np.array([max(self.fluid.p_bubble, P_VAPOUR_FLOOR) if z == PRODUCTION else P_VAPOUR_FLOOR for z in zones])
+        self.void_m3 = np.zeros(net.n)
+        self._floor_mask = np.array([not (net.fixed[i] or z == "reservoir") for i, z in enumerate(zones)])
         self.p0 = net.P.copy()
         self.p_prev = net.P.copy()
         for c in self.circuits:
@@ -409,6 +418,25 @@ class DynamicModel:
             self.S[self.net.fixed] = 0.0
         self.T_node = T
 
+    def _column_separation(self) -> None:
+        """A trapped liquid volume that contracts (cooling, leakage) cannot fall
+        below the pressure at which gas comes out of solution (bubble point,
+        production) or a vapour void forms (other lines): the pressure is held
+        there and the missing volume is carried as a void, which liquid flowing
+        back in fills before the pressure rises again (mass-consistent)."""
+        net = self.net
+        m = self._floor_mask
+        if not m.any():
+            return
+        P, cap, floor = net.P, net.cap_node, self.p_floor
+        v = self.void_m3 - cap * (P - floor)  # void that would remain at the floor pressure
+        hold = m & (v > 0.0)
+        refill = m & (self.void_m3 > 0.0) & ~hold
+        P[hold] = floor[hold]
+        self.void_m3[hold] = v[hold]
+        P[refill] = floor[refill] - v[refill] / np.where(cap[refill] > 0, cap[refill], 1.0)
+        self.void_m3[refill] = 0.0
+
     def tubing_mean_temperature(self, elements: list[str]) -> float:
         cells = [c for e in elements for c in self.grid.cell_of_pipe.get(e, [])]
         if not cells:
@@ -437,6 +465,7 @@ class DynamicModel:
             net.P, net.Q = P_old, Q_old
             self.failed = f"dynamic hydraulic solver failed: {exc}"
             raise DynamicSolverError(self.failed) from exc
+        self._column_separation()
         F = self.grid.set_flows(net.Q)
         if self.mp is not None:
             self.mp.set_cell_targets(P_old)
@@ -731,6 +760,13 @@ class DynamicModel:
         for i, nd in enumerate(net.nodes):
             p = net.P[i]
             if nd.zone == "reservoir":
+                continue
+            if self.void_m3[i] > 1e-6 and nd.topo in topo_nodes:
+                out.append({"severity": "warning", "code": "COLUMN_SEPARATION",
+                            "message": f"{topo_nodes[nd.topo].name}: the trapped liquid contracted; the pressure is held at "
+                                       f"{u.pa_to_bara(p):.1f} bara where {'gas comes out of solution (bubble point)' if nd.zone == PRODUCTION else 'a vapour void forms'} "
+                                       f"({self.void_m3[i] * 1000:.1f} L of gas / vapour). It refills when liquid flows back in.",
+                            "location": nd.topo})
                 continue
             if p <= 0:
                 nm = topo_nodes[nd.topo].name if nd.topo in topo_nodes else nd.name

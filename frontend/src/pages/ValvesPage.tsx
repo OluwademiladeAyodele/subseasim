@@ -120,7 +120,7 @@ export function ValvesPage() {
         })}
         {state.mode !== "dynamic" && valves.some((v) => v.branch) && (
           <Panel title="Note">
-            <p className="p-4 text-[13px] text-muted">The steady model does not represent annulus or injection branches: their valves move but have no process response.</p>
+            <p className="text-[13px] text-muted">The steady model does not represent annulus or injection branches: their valves move but have no process response.</p>
           </Panel>
         )}
       </div>

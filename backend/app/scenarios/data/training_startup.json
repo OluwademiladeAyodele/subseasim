@@ -1,0 +1,23 @@
+{
+  "extends": "xt_230xp22b",
+  "id": "training_startup",
+  "name": "Training - well start-up from shut-in",
+  "description": "Tree workstation, single-phase producer fully SHUT IN (SCSSV, PMV, PWV closed; choke at 0 %). Used by Exercise 2. All data ILLUSTRATIVE.",
+  "element_overrides": {
+    "SCSSV": {
+      "initial_position_pct": 0
+    },
+    "PMV": {
+      "initial_position_pct": 0
+    },
+    "PWV": {
+      "initial_position_pct": 0
+    },
+    "CHOKE": {
+      "initial_position_pct": 0
+    }
+  },
+  "briefing": [
+    "Start Training > 'Exercise 2 - Well start-up from shut-in' to be guided step by step."
+  ]
+}

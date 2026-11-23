@@ -109,6 +109,9 @@ Custom materials (vendor K, n, density, behaviour) can be entered.
 - Generic impingement of the inlet jet on the gallery:
   `ΔT/dt = E_m(U_inlet, 90°) ṁ / (ρ A_inlet)`.
 - Labelled as screening.
+- Body and gallery are one location here. In a plug-and-cage angle choke the
+  gallery is the annular space inside the body around the cage, so splitting
+  them would need geometry that has not been entered.
 
 **Outlet wall (DNV straight-pipe model, steel).**
 
@@ -118,6 +121,25 @@ Custom materials (vendor K, n, density, behaviour) can be entered.
 integration step. Wear is integrated every 10 simulated seconds (immediately
 while the choke moves), over the entered operating history, and during
 fast-forward.
+
+### API RP 14E erosional velocity (supplementary screening)
+
+    Ve [ft/s] = C / √ρ_m [lb/ft³]      (reported in m/s for ρ_m in kg/m³)
+
+- C is an input, with a default of 100 (API RP 14E, continuous, solids-free
+  service; the API gives 125 for intermittent service).
+- The check is made at three locations, using the no-slip mixture velocity
+  and density from the simulated flow:
+  - the body gallery (inlet conditions; needs the gallery diameter);
+  - the choke outlet bore (outlet conditions; needs the bore);
+  - the flowline.
+- A location whose geometry has not been entered is reported as
+  unavailable.
+- When sand is present the panel warns that the API requires C to be
+  reduced for solids-laden flow, so "below Ve" does not mean erosion-free.
+- **It is not a sand-erosion model and not a choke-geometry model.** It does
+  not enter the health category or the remaining life. The DNV results
+  govern.
 
 ## 5. Cumulative wear and remaining life
 
@@ -209,3 +231,12 @@ covered by the operating history; trim replacement resets the wear epoch.
 - the calibration posterior against the closed-form value, with narrowed
   uncertainty;
 - feedback raises the simulated Cv, and measured Cv tracking detects it.
+
+`backend/tests/test_api14e.py` checks:
+
+- Ve against the US-unit formula (exact unit definitions);
+- scaling with C and with 1/√ρ;
+- the three locations from the simulated flow;
+- the warning when sand is present;
+- that missing geometry is reported, not assumed;
+- that the C input reaches the result.

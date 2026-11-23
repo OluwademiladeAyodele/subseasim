@@ -55,6 +55,11 @@ supports branches, check valves, chemical bands, zoom and pan. See
 | `app/scenarios/` | Loader (inheritance via `extends`, `element_overrides`) and JSON data |
 | `app/simulation/` | Engineering engine (see SIMULATION_MODEL.md) |
 | `app/training/` | Exercise framework, exercise definitions, registry |
+| `app/jobs.py`, `app/job_kinds.py` | Cooperative background jobs on the event loop (see BACKGROUND_JOBS.md) |
+| `app/surrogates/` | Surrogate models (GP, response surface), simulator design of experiments, envelope (see SURROGATE_MODELS.md) |
+| `app/studies/`, `app/reports/` | Scenario comparison on steady twins; engineering report (HTML) from records |
+| `app/storage/` | Simulation records: SQLite store and record builder (see SIMULATION_RECORDS.md) |
+| `app/core/model_registry.py` | Method, version, model status and validation of every calculation module |
 | `app/sessions.py` | Session manager, simulation loop, WebSocket broadcast |
 
 ### API summary
@@ -73,6 +78,10 @@ supports branches, check valves, chemical bands, zoom and pan. See
 | PUT | `/api/sessions/{sid}/boundary` | SI boundary conditions |
 | PUT | `/api/sessions/{sid}/fluid` | SI fluid properties |
 | POST | `/api/sessions/{sid}/training/start\|answer\|advance\|stop` | Training |
+| POST | `/api/sessions/{sid}/jobs` | Start a background job `{kind, params}` (202) |
+| GET / POST | `/api/sessions/{sid}/jobs`, `/api/jobs/{id}` (`/cancel`) | List, poll, cancel jobs |
+| POST | `/api/sessions/{sid}/records` | Save the current assessment as a record |
+| GET / DELETE | `/api/records`, `/api/records/{id}` (`/export`, `/report`) | List, read, export, report, delete records |
 | WS | `/ws/sessions/{sid}` | `init` (full state, history, events), then `update` deltas |
 
 Errors: 404 unknown session/scenario/valve/exercise, 409 rejected command or invalid

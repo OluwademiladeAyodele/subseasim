@@ -13,7 +13,8 @@ the user): crossover valve from the annulus service-line junction into the
 tree cavity, chemical injection into the production wing upstream of PWV,
 two methanol injection valves (upstream and downstream of PWV), downhole
 chemical injection below the SCSSV, A/B SCM hydraulic headers with selector
-valves, and the reference tag numbering as display aliases.
+valves. Tags are plain engineering tags (PMV-101, PT-104, HSV-101), not the
+reference numbering.
 
 Every schematic coordinate is entered in PHOTO PIXELS (as measured on the
 supplied 810 x 1080 px photograph, keystone-straightened so verticals are
@@ -41,7 +42,7 @@ sc["id"] = "xt_230xp22b"
 sc["name"] = "XT workstation - Production 230XP22B layout (illustrative)"
 sc["description"] = (
     "Dynamic subsea producer arranged as on the reference control-system page 'Production 230XP22B': production bore with "
-    "SCSSV, PMV and the production wing (PWV) ending in the production choke PCV3006; A-annulus with AMV, AWV, crossover "
+    "SCSSV, PMV and the production wing (PWV) ending in the production choke CHK-101; A-annulus with AMV, AWV, crossover "
     "XOV into the tree cavity and the annulus service line valve SLV; chemical injection into the production wing; two "
     "methanol injection valves either side of PWV; downhole chemical injection; SCM A/B hydraulic headers with selector "
     "valves (fail-safe closure on loss of supply). The photograph defines the ARCHITECTURE only: every reading is calculated by the simulator from the configured reservoir, fluid, boundary and valve inputs. All data "
@@ -62,7 +63,7 @@ def drop(ids: set[str]) -> None:
 
 
 # --- topology as on the reference -----------------------------------------
-# XOV3032 connects the service-line junction (downstream of AWV) to the tree
+# XOV-101 connects the service-line junction (downstream of AWV) to the tree
 # cavity - on the reference the crossover line leaves the service line
 # between AWV's branch and the bore.
 elems["XOV"]["from"] = "N_ANN_SVC"
@@ -71,7 +72,7 @@ elems["XOV"]["name"] = "Crossover valve (annulus service-line junction to tree c
 # Methanol route into the annulus service line is not on the reference page.
 drop({"SUP_MEOH_ANN", "N_MIV_IN", "N_MIV_A", "CL-305", "MIV301", "NRV305", "FT-305"})
 
-# Chemical injection points: the reference shows CIV3027 / CIV3025 / CIV3023
+# Chemical injection points: the reference shows CIV-302 / CIV-303 / CIV-301
 # lines joining the production wing between the bore and PWV.
 for num in (302, 303):
     elems[f"NRV{num}"]["to"] = "N_PMV_PWV"
@@ -81,13 +82,13 @@ _inj_node = {"corrosion_inhibitor": "N_PMV_PWV", "biocide": "N_PMV_PWV", "wax_in
 for c in sc["chemicals"]:
     c["injection_node"] = _inj_node.get(c["id"], c["injection_node"])
 
-# Two methanol injection valves fed from one methanol header: MIV3015 into the
-# wing upstream of PWV, MIV3016 between PWV and the choke.
+# Two methanol injection valves fed from one methanol header: MIV-302 into the
+# wing upstream of PWV, MIV-303 between PWV and the choke.
 sub["nodes"] += [
     {"id": "SUP_MEOH_MIV", "name": "Methanol to MIV header: SDU supply", "elevation_m": -1150, "zone": "methanol"},
     {"id": "N_MIV_HDR", "name": "Methanol MIV header at tree", "elevation_m": -1195, "zone": "methanol"},
-    {"id": "N_MIV1_A", "name": "Methanol: downstream of MIV3015", "elevation_m": -1195, "zone": "methanol"},
-    {"id": "N_MIV2_A", "name": "Methanol: downstream of MIV3016", "elevation_m": -1195, "zone": "methanol"},
+    {"id": "N_MIV1_A", "name": "Methanol: downstream of MIV-302", "elevation_m": -1195, "zone": "methanol"},
+    {"id": "N_MIV2_A", "name": "Methanol: downstream of MIV-303", "elevation_m": -1195, "zone": "methanol"},
 ]
 sub["boundaries"].append({"node": "SUP_MEOH_MIV", "pressure_bara": 250, "description": "Methanol pump discharge (MIV header) at the SDU"})
 _miv = dict(type="valve", valve_type="injection_isolation", bore_diameter_m=0.01, loss_coefficient_open=2.0,
@@ -107,9 +108,9 @@ meoh = next(c for c in sc["chemicals"] if c["id"] == "methanol")
 for k in ("annulus_supply_node", "annulus_valve", "annulus_check_valve", "annulus_flow_transmitter"):
     meoh.pop(k, None)
 meoh["routes"] = [
-    {"id": "miv_up", "name": "MIV3015 - production wing upstream of PWV", "supply_node": "SUP_MEOH_MIV", "valve": "MIV-302",
+    {"id": "miv_up", "name": "MIV-302 - production wing upstream of PWV", "supply_node": "SUP_MEOH_MIV", "valve": "MIV-302",
      "check_valve": "NRV-306", "injection_node": "N_PMV_PWV", "flow_transmitter": "FT-306"},
-    {"id": "miv_dn", "name": "MIV3016 - between PWV and the production choke", "supply_node": "SUP_MEOH_MIV", "valve": "MIV-303",
+    {"id": "miv_dn", "name": "MIV-303 - between PWV and the production choke", "supply_node": "SUP_MEOH_MIV", "valve": "MIV-303",
      "check_valve": "NRV-307", "injection_node": "N_UC", "flow_transmitter": "FT-307"},
 ]
 
@@ -125,17 +126,17 @@ sc["element_overrides"]["CHOKE"] = {"actuation_delay_s": 1}
 
 # --- instruments added for the reference transmitters ---------------------
 sub["instruments"] += [
-    {"tag": "TT-104", "type": "temperature", "description": "Tree cavity temperature (PTT3005)", "node": "N_PMV_PWV", "range_min": 0, "range_max": 150},
-    {"tag": "PT-107", "type": "pressure", "description": "Production wing pressure upstream of PWV (PTT3004)", "node": "N_PMV_PWV", "range_min": 0, "range_max": 690},
-    {"tag": "TT-107", "type": "temperature", "description": "Production wing temperature upstream of PWV (PTT3004)", "node": "N_PMV_PWV", "range_min": 0, "range_max": 150},
-    {"tag": "PT-002", "type": "pressure", "description": "Downhole gauge B pressure (PTT3003)", "node": "N_BH", "range_min": 0, "range_max": 690},
-    {"tag": "TT-002", "type": "temperature", "description": "Downhole gauge B temperature (PTT3003)", "node": "N_BH", "range_min": 0, "range_max": 150},
-    {"tag": "PT-106", "type": "pressure", "description": "Production line pressure downstream of choke, 30 m (PTT3009)", "element": "FL-101", "distance_m": 30, "range_min": 0, "range_max": 690},
-    {"tag": "TT-106", "type": "temperature", "description": "Production line temperature downstream of choke, 30 m (PTT3009)", "element": "FL-101", "distance_m": 30, "range_min": 0, "range_max": 150},
-    {"tag": "PT-404", "type": "pressure", "description": "Annulus service-line junction pressure, upstream of SLV (PT3014)", "node": "N_ANN_SVC", "range_min": 0, "range_max": 690},
-    {"tag": "PDT-401", "type": "differential_pressure", "description": "Differential pressure across the service line valve SLV (PD3014)", "high_node": "N_ANN_SVC", "low_node": "N_SVC_L", "range_min": -350, "range_max": 350},
-    {"tag": "FT-306", "type": "flow", "description": "Methanol flow through MIV3015 (wing, upstream of PWV)", "element": "MIV302", "range_min": 0, "range_max": 120},
-    {"tag": "FT-307", "type": "flow", "description": "Methanol flow through MIV3016 (between PWV and choke)", "element": "MIV303", "range_min": 0, "range_max": 120},
+    {"tag": "TT-104", "type": "temperature", "description": "Tree cavity temperature", "node": "N_PMV_PWV", "range_min": 0, "range_max": 150},
+    {"tag": "PT-107", "type": "pressure", "description": "Production wing pressure upstream of PWV", "node": "N_PMV_PWV", "range_min": 0, "range_max": 690},
+    {"tag": "TT-107", "type": "temperature", "description": "Production wing temperature upstream of PWV", "node": "N_PMV_PWV", "range_min": 0, "range_max": 150},
+    {"tag": "PT-002", "type": "pressure", "description": "Downhole gauge B pressure", "node": "N_BH", "range_min": 0, "range_max": 690},
+    {"tag": "TT-002", "type": "temperature", "description": "Downhole gauge B temperature", "node": "N_BH", "range_min": 0, "range_max": 150},
+    {"tag": "PT-106", "type": "pressure", "description": "Production line pressure downstream of choke, 30 m", "element": "FL-101", "distance_m": 30, "range_min": 0, "range_max": 690},
+    {"tag": "TT-106", "type": "temperature", "description": "Production line temperature downstream of choke, 30 m", "element": "FL-101", "distance_m": 30, "range_min": 0, "range_max": 150},
+    {"tag": "PT-404", "type": "pressure", "description": "Annulus service-line junction pressure, upstream of SLV", "node": "N_ANN_SVC", "range_min": 0, "range_max": 690},
+    {"tag": "PDT-401", "type": "differential_pressure", "description": "Differential pressure across the service line valve SLV", "high_node": "N_ANN_SVC", "low_node": "N_SVC_L", "range_min": -350, "range_max": 350},
+    {"tag": "FT-306", "type": "flow", "description": "Methanol flow through MIV-302 (wing, upstream of PWV)", "element": "MIV302", "range_min": 0, "range_max": 120},
+    {"tag": "FT-307", "type": "flow", "description": "Methanol flow through MIV-303 (between PWV and choke)", "element": "MIV303", "range_min": 0, "range_max": 120},
 ]
 
 # --- control hydraulics (selector valves on the reference) ----------------
@@ -144,20 +145,20 @@ LP_VALVES = ["PMV-101", "PWV-101", "AMV-101", "AWV-101", "XOV-101", "SLV-101", "
              "CHK-101", "CIMV-301", "CIMV-302", "CIMV-303", "CIMV-304"]
 sc["control_hydraulics"] = {
     "supplies": [
-        {"id": "LP", "name": "LP", "tag": "PT-HYD-LP", "pressure_bara": 207, "minimum_operating_pressure_bara": 110},
-        {"id": "HP", "name": "HP", "tag": "PT-HYD-HP", "pressure_bara": 517, "minimum_operating_pressure_bara": 300},
+        {"id": "LP", "name": "LP", "tag": "PT-601", "pressure_bara": 207, "minimum_operating_pressure_bara": 110},
+        {"id": "HP", "name": "HP", "tag": "PT-602", "pressure_bara": 517, "minimum_operating_pressure_bara": 300},
     ],
     "headers": [
-        {"id": "LP-A", "name": "LP header SCM A", "tag": "PT-HYD-LPA", "supply": "LP", "scm": "A"},
-        {"id": "LP-B", "name": "LP header SCM B", "tag": "PT-HYD-LPB", "supply": "LP", "scm": "B"},
-        {"id": "HP-A", "name": "HP header SCM A", "tag": "PT-HYD-HPA", "supply": "HP", "scm": "A"},
-        {"id": "HP-B", "name": "HP header SCM B", "tag": "PT-HYD-HPB", "supply": "HP", "scm": "B"},
+        {"id": "LP-A", "name": "LP header SCM A", "tag": "PT-611", "supply": "LP", "scm": "A"},
+        {"id": "LP-B", "name": "LP header SCM B", "tag": "PT-612", "supply": "LP", "scm": "B"},
+        {"id": "HP-A", "name": "HP header SCM A", "tag": "PT-621", "supply": "HP", "scm": "A"},
+        {"id": "HP-B", "name": "HP header SCM B", "tag": "PT-622", "supply": "HP", "scm": "B"},
     ],
     "selector_valves": [
-        {"tag": "SEL-LP-A", "name": "LP selector valve to SCM A", "header": "LP-A"},
-        {"tag": "SEL-LP-B", "name": "LP selector valve to SCM B", "header": "LP-B"},
-        {"tag": "SEL-HP-A", "name": "HP selector valve to SCM A", "header": "HP-A"},
-        {"tag": "SEL-HP-B", "name": "HP selector valve to SCM B", "header": "HP-B"},
+        {"tag": "HSV-101", "name": "LP selector valve to SCM A", "header": "LP-A"},
+        {"tag": "HSV-102", "name": "LP selector valve to SCM B", "header": "LP-B"},
+        {"tag": "HSV-103", "name": "HP selector valve to SCM A", "header": "HP-A"},
+        {"tag": "HSV-104", "name": "HP selector valve to SCM B", "header": "HP-B"},
     ],
     "valve_supply": {**{t: "LP" for t in LP_VALVES}, "SCSSV-101": "HP"},
     "fail_safe_close": [t for t in LP_VALVES if not t.startswith(("CHK", "CIMV"))] + ["SCSSV-101"],
@@ -183,7 +184,7 @@ sc["sand_choke"] = {
     "completion": {"completion_type": "cased_perforated_standalone_screens"},
     "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500)", "max_cv": 161.0,
               "min_controllable_cv": 1.61, "actuator_steps": 165, "erosion_feedback": True},
-    "detector": {"tag": "XT3001"},
+    "detector": {"tag": "SDT-101"},
 }
 # Complete ILLUSTRATIVE set (NOT field data) so training can run before site data exist.
 sc["sand_choke_example"] = {
@@ -195,7 +196,11 @@ sc["sand_choke_example"] = {
                    "perforated_interval_m": 30, "screen_type": "premium_mesh", "screen_aperture_um": 250, "bridging_factor": 2.0},
     "sand": {"grain_density_kg_m3": 2650, "d10_um": 60, "d50_um": 150, "d90_um": 300, "mode": "predictive",
              "rate_coefficient_kg_m3": 0.05, "rate_exponent": 1.5, "measured_unit": "kg_d"},
-    "detector": {"tag": "XT3001"},
+    "detector": {"tag": "SDT-101"},
+    "cavitation": {"fl_table": [{"opening_pct": 10, "fl": 0.95}, {"opening_pct": 50, "fl": 0.9}, {"opening_pct": 100, "fl": 0.85}],
+                   "fl_source": "ILLUSTRATIVE - replace with the manufacturer's FL for this trim",
+                   "sigma_incipient": 2.0, "sigma_constant": 1.7, "sigma_damage": 1.4,
+                   "threshold_source": "ILLUSTRATIVE - replace with the manufacturer's sigma limits for this trim"},
     "choke": {"design": "plug_and_cage", "model_label": "Plug & multi-hole cage choke (F500) - ILLUSTRATIVE geometry",
               "max_cv": 161.0, "min_controllable_cv": 1.61, "actuator_steps": 165, "stroke_mm": 60, "cage_inner_diameter_mm": 90,
               "cage_wall_thickness_mm": 12, "plug_diameter_mm": 90, "choke_outlet_bore_mm": 127, "gallery_diameter_mm": 127,
@@ -209,48 +214,15 @@ sc["sand_choke_example"] = {
                    "max_body_wall_loss_mm": 3.0, "max_outlet_wall_loss_mm": 3.0, "reference_step": 82},
 }
 
-# --- display tags (reference numbering) -----------------------------------
-V, U, P, A = "verified", "uncertain", "placeholder", "addition"
-alias = {
-    # valves
-    "AWV-101": ("AWV3034", V, ""), "AMV-101": ("AMV3030", V, ""), "PMV-101": ("PMV3004", V, ""),
-    "PWV-101": ("PWV3005", V, ""), "SCSSV-101": ("SCSSV3003", V, ""), "CHK-101": ("PCV3006", V, ""),
-    "XOV-101": ("XOV3032", V, ""), "SLV-101": ("SLV3035", V, ""),
-    "CIV-302": ("CIV3027", U, "Partly legible on the reference."), "CIMV-302": ("CCV3026", U, "Partly legible on the reference."),
-    "CIV-303": ("CIV3025", U, "Partly legible on the reference."),
-    "CIV-301": ("CIV3023", U, "Partly legible on the reference."), "CIMV-301": ("CCV3022", U, "Partly legible on the reference."),
-    "MIV-302": ("MIV3015", U, "Partly legible on the reference."), "MIV-303": ("MIV3016", U, "Partly legible on the reference."),
-    "CIV-304": ("CIV3021", U, "Partly legible on the reference."), "CIMV-304": ("CCV3036", U, "Partly legible on the reference."),
-    "SV-101": ("SV-101", A, "Swab valve: SubseaSim addition, not drawn on the reference page."),
-    "CIMV-303": ("CIMV-303", A, "Metering valve not drawn on the reference page for this line."),
-    # transmitters
-    "PT-104": ("PT3005", V, "Panel PTT3005."), "TT-104": ("TT3005", V, "Panel PTT3005."),
-    "PT-107": ("PT3004", V, "Panel PTT3004."), "TT-107": ("TT3004", V, "Panel PTT3004."),
-    "PT-001": ("PT3002", V, "Panel PTT3002 (downhole gauge A)."), "TT-001": ("TT3002", V, "Panel PTT3002 (downhole gauge A)."),
-    "PT-002": ("PT3003", V, "Panel PTT3003 (downhole gauge B)."), "TT-002": ("TT3003", V, "Panel PTT3003 (downhole gauge B)."),
-    "PT-103": ("PT3008", V, "Panel PTT3008."), "TT-103": ("TT3008", V, "Panel PTT3008."),
-    "PT-106": ("PT3009", V, "Panel PTT3009."), "TT-106": ("TT3009", V, "Panel PTT3009."),
-    "PT-402": ("PT3030", V, ""),
-    "PT-401": ("PT3031", U, "Reads PT3031 or PT3011 on the reference; tap drawn above AMV, modelled on the A-annulus below AMV."),
-    "PT-404": ("PT3014", V, ""), "PDT-401": ("PD3014", V, "Measured across SLV (assumed from its position on the reference)."),
-    # control hydraulics
-    "PT-HYD-LP": ("LPHP1", U, "Supply pressure panel; label partly legible."),
-    "PT-HYD-HP": ("HPHP1", U, "Supply pressure panel; label partly legible."),
-    "PT-HYD-LPA": ("LP3096", U, "Partly legible."), "PT-HYD-LPB": ("LP3097", U, "Partly legible."),
-    "PT-HYD-HPA": ("HP3098", U, "Partly legible."), "PT-HYD-HPB": ("HP3099", U, "Partly legible."),
-    "SEL-LP-A": ("SEL-LP-A", P, "Selector valves carry no tag on the reference page."),
-    "SEL-LP-B": ("SEL-LP-B", P, "Selector valves carry no tag on the reference page."),
-    "SEL-HP-A": ("SEL-HP-A", P, "Selector valves carry no tag on the reference page."),
-    "SEL-HP-B": ("SEL-HP-B", P, "Selector valves carry no tag on the reference page."),
-}
-sc["tag_aliases"] = {k: {"tag": t, "status": s, "note": n} for k, (t, s, n) in alias.items()}
+# --- tags: plain engineering tags everywhere (no reference-HMI aliases) ------
+sc["tag_aliases"] = {}
 
 sc["briefing"] = [
-    "This page reproduces the reference control-system layout 'Production 230XP22B'. Tags are the reference numbers; open a component to see its SubseaSim engineering tag.",
+    "This page follows the arrangement of the reference control-system page 'Production 230XP22B', with SubseaSim engineering tags.",
     "Every reading is calculated by the simulator from the inputs on the Conditions page (reservoir pressure, temperature, productivity, fluid, downstream pressure) and the valve positions - change them and watch the transmitters respond.",
-    "Try closing PWV3005: the tree cavity (PTT3005 / PTT3004) builds toward shut-in pressure while the choke outlet (PTT3008 / PTT3009) falls toward flowline pressure.",
-    "Selector valves route the LP and HP hydraulic supplies to SCM A and B. Close both LP selector valves and watch LP3096 / LP3097 bleed down until the fail-safe valves close.",
-    "Open MIV3015 (upstream of PWV) or MIV3016 (between PWV and the choke) to inject methanol into the production stream; the concentration is tracked downstream.",
+    "Try closing PWV-101: the tree cavity (PTT-104 / PTT-107) builds toward shut-in pressure while the choke outlet (PTT-103 / PTT-106) falls toward flowline pressure.",
+    "Selector valves route the LP and HP hydraulic supplies to SCM A and B. Close both LP selector valves and watch PT-611 / PT-612 bleed down until the fail-safe valves close.",
+    "Open MIV-302 (upstream of PWV) or MIV-303 (between PWV and the choke) to inject methanol into the production stream; the concentration is tracked downstream.",
 ]
 
 # --- process-view layout (full system page) for the changed topology -------
@@ -392,38 +364,38 @@ components = [
     comp("NRV307", "check_valve", "element:NRV307", (455, 175), 270, flow_path="miv-dn"),
     comp("NRV304", "check_valve", "element:NRV304", (205, 356), 0, flow_path="chem-downhole"),
     # --- transmitter panels (reference positions)
-    panel("PTT3005", ["instrument:PT-104", "instrument:TT-104"], (240, 155, 279, 184), tap=(BORE, 164), flow_path="bore-cavity", group="tree"),
-    panel("PTT3004", ["instrument:PT-107", "instrument:TT-107"], (270, 104, 309, 133), tap=(289, WING), flow_path="wing", group="tree"),
-    panel("PT3014", ["instrument:PT-404"], (105, 168, 144, 186), tap=(124, 196), flow_path="service-line", group="annulus"),
-    panel("PD3014", ["instrument:PDT-401"], (93, 211, 146, 223), group="annulus", note="Differential across SLV (assumed)."),
-    panel("PT3030", ["instrument:PT-402"], (161, 212, 199, 230), tap=(ANN, 222), flow_path="annulus-cavity", group="annulus"),
-    panel("PT3031", ["instrument:PT-401"], (161, 239, 199, 257), tap=(ANN, 249), flow_path="annulus-cavity", group="annulus",
+    panel("PTT-104", ["instrument:PT-104", "instrument:TT-104"], (248, 155, 287, 184), tap=(BORE, 164), flow_path="bore-cavity", group="tree"),
+    panel("PTT-107", ["instrument:PT-107", "instrument:TT-107"], (270, 104, 309, 133), tap=(289, WING), flow_path="wing", group="tree"),
+    panel("PT-404", ["instrument:PT-404"], (105, 168, 144, 186), tap=(124, 196), flow_path="service-line", group="annulus"),
+    panel("PDT-401", ["instrument:PDT-401"], (93, 211, 146, 223), group="annulus", note="Differential across SLV (assumed)."),
+    panel("PT-402", ["instrument:PT-402"], (161, 212, 199, 230), tap=(ANN, 222), flow_path="annulus-cavity", group="annulus"),
+    panel("PT-401", ["instrument:PT-401"], (161, 239, 199, 257), tap=(ANN, 249), flow_path="annulus-cavity", group="annulus",
           note="Drawn above AMV as on the reference; measures the A-annulus below AMV."),
-    panel("PTT3002", ["instrument:PT-001", "instrument:TT-001"], (252, 340, 289, 368), tap=(BORE, 350), flow_path="bore-lower-tubing", group="downhole"),
-    panel("PTT3003", ["instrument:PT-002", "instrument:TT-002"], (290, 340, 327, 368), group="downhole"),
-    panel("PTT3008", ["instrument:PT-103", "instrument:TT-103"], (488, 214, 526, 243), tap=(CHKX, 227), flow_path="choke-outlet", group="downstream"),
-    panel("PTT3009", ["instrument:PT-106", "instrument:TT-106"], (488, 250, 526, 279), tap=(CHKX, 260), flow_path="choke-outlet", group="downstream"),
-    {"id": "PCV3006-panel", "type": "choke_panel", "model": "element:CHOKE", **box(496, 124, 537, 167), "rotation": 0, "group": "downstream"},
-    {"id": "XT3001", "type": "sand_detector", "model": None, **box(490, 175, 537, 195), "rotation": 0, "tap": p(CHKX, 184),
+    panel("PTT-001", ["instrument:PT-001", "instrument:TT-001"], (252, 340, 289, 368), tap=(BORE, 350), flow_path="bore-lower-tubing", group="downhole"),
+    panel("PTT-002", ["instrument:PT-002", "instrument:TT-002"], (290, 340, 327, 368), group="downhole"),
+    panel("PTT-103", ["instrument:PT-103", "instrument:TT-103"], (488, 214, 526, 243), tap=(CHKX, 227), flow_path="choke-outlet", group="downstream"),
+    panel("PTT-106", ["instrument:PT-106", "instrument:TT-106"], (488, 250, 526, 279), tap=(CHKX, 260), flow_path="choke-outlet", group="downstream"),
+    {"id": "SDT-101", "type": "sand_detector", "model": None, **box(490, 175, 537, 195), "rotation": 0, "tap": p(CHKX, 184),
      "flow_path": "choke-outlet", "group": "downstream",
-     "note": "XT3001 on the reference (assumed acoustic sand detector on the choke outlet); reading from the sand-detector model."},
-    comp("XT3001-body", "inline_device", None, (CHKX, 200), 90, flow_path="choke-outlet",
-         note="Inline device on the choke outlet (reference). Associated with XT3001."),
+     "note": "SDT-101 acoustic sand detector on the choke outlet; reading from the sand-detector model."},
+    comp("SDT-101-body", "inline_device", None, (CHKX, 200), 90, flow_path="choke-outlet",
+         note="Sand detector SDT-101 clamp-on sensor on the choke outlet."),
+    {"id": "CHK-101-panel", "type": "choke_panel", "model": "element:CHOKE", **box(496, 124, 537, 167), "rotation": 0, "group": "downstream"},
     # --- selector valves (lower right)
-    comp("SEL-LP-A", "selector_valve", "selector:SEL-LP-A", (468, 326), 0, flow_path="hyd-lp-a"),
-    comp("SEL-LP-B", "selector_valve", "selector:SEL-LP-B", (468, 364), 0, flow_path="hyd-lp-b"),
-    comp("SEL-HP-A", "selector_valve", "selector:SEL-HP-A", (468, 397), 0, flow_path="hyd-hp-a"),
-    comp("SEL-HP-B", "selector_valve", "selector:SEL-HP-B", (468, 433), 0, flow_path="hyd-hp-b"),
-    {"id": "LPHP1", "type": "header_panel", "model": "supply:LP", **box(410, 320, 445, 340), "rotation": 0, "tap": p(427, 346), "group": "selector"},
-    {"id": "HPHP1", "type": "header_panel", "model": "supply:HP", **box(410, 391, 445, 411), "rotation": 0, "tap": p(427, 417), "group": "selector"},
-    {"id": "LP3096", "type": "header_panel", "model": "header:LP-A", **box(487, 302, 522, 321), "rotation": 0, "tap": p(500, 326), "group": "selector"},
-    {"id": "LP3097", "type": "header_panel", "model": "header:LP-B", **box(487, 338, 522, 357), "rotation": 0, "tap": p(500, 364), "group": "selector"},
-    {"id": "HP3098", "type": "header_panel", "model": "header:HP-A", **box(487, 373, 522, 392), "rotation": 0, "tap": p(500, 397), "group": "selector"},
-    {"id": "HP3099", "type": "header_panel", "model": "header:HP-B", **box(487, 409, 522, 428), "rotation": 0, "tap": p(500, 433), "group": "selector"},
+    comp("HSV-101", "selector_valve", "selector:HSV-101", (468, 326), 0, flow_path="hyd-lp-a"),
+    comp("HSV-102", "selector_valve", "selector:HSV-102", (468, 364), 0, flow_path="hyd-lp-b"),
+    comp("HSV-103", "selector_valve", "selector:HSV-103", (468, 397), 0, flow_path="hyd-hp-a"),
+    comp("HSV-104", "selector_valve", "selector:HSV-104", (468, 433), 0, flow_path="hyd-hp-b"),
+    {"id": "PT-601", "type": "header_panel", "model": "supply:LP", **box(410, 320, 445, 340), "rotation": 0, "tap": p(427, 346), "group": "selector"},
+    {"id": "PT-602", "type": "header_panel", "model": "supply:HP", **box(410, 391, 445, 411), "rotation": 0, "tap": p(427, 417), "group": "selector"},
+    {"id": "PT-611", "type": "header_panel", "model": "header:LP-A", **box(487, 302, 522, 321), "rotation": 0, "tap": p(500, 326), "group": "selector"},
+    {"id": "PT-612", "type": "header_panel", "model": "header:LP-B", **box(487, 338, 522, 357), "rotation": 0, "tap": p(500, 364), "group": "selector"},
+    {"id": "PT-621", "type": "header_panel", "model": "header:HP-A", **box(487, 373, 522, 392), "rotation": 0, "tap": p(500, 397), "group": "selector"},
+    {"id": "PT-622", "type": "header_panel", "model": "header:HP-B", **box(487, 409, 522, 428), "rotation": 0, "tap": p(500, 433), "group": "selector"},
     # --- SubseaSim transmitters NOT on the reference page (additions region, no taps:
     #     the panel text states the measurement location)
     panel("PTT-102", ["instrument:PT-102", "instrument:TT-102"], (556, 104, 646, 133), group="additions",
-          note="Upstream of the production choke (between PWV and PCV3006)."),
+          note="Upstream of the production choke (between PWV and CHK-101)."),
     panel("PDT-101", ["instrument:PDT-101"], (556, 139, 646, 153), group="additions", note="Differential pressure across the production choke."),
     panel("FT-101", ["instrument:FT-101"], (556, 158, 646, 172), group="additions", note="Production flow downstream of the choke."),
     panel("PTT-101", ["instrument:PT-101", "instrument:TT-101"], (556, 178, 646, 207), group="additions",
@@ -458,7 +430,7 @@ groups = [
     {"id": "downstream", "label": "Choke & downstream", **box(470, 120, 545, 290), "frame": False},
     {"id": "selector", "label": "Selector Valves", **box(385, 296, 535, 446), "frame": True},
     {"id": "downhole", "label": "Downhole", **box(55, 334, 330, 446), "frame": False},
-    {"id": "additions", "label": "SubseaSim additions - not on the reference page", **box(550, 90, 652, 446), "frame": True},
+    {"id": "additions", "label": "Additional measurements", **box(550, 90, 652, 446), "frame": True},
 ]
 
 annotations = [
@@ -473,7 +445,7 @@ layout_doc = {
     "title": "Production 230XP22B",
     "subtitle": "Christmas tree workstation - layout traced from the reference control-system page",
     "width": round((652 - X0) * S),
-    "height": round((452 - Y0) * S),
+    "height": round((460 - Y0) * S),
     "reference": {
         "source": "User-supplied photograph of a subsea control-system page 'Production 230XP22B without IWC' (810 x 1080 px).",
         "method": "Component centres and panel boxes measured in photo pixels, keystone-straightened (verticals made vertical, "
@@ -482,10 +454,9 @@ layout_doc = {
         "photo_origin_px": [X0, Y0],
         "scale": S,
         "notes": [
-            "Tags PT3010, PT3011 and PT3013 (listed in the requirement) could not be located on the photograph and are not assigned.",
             "The SCM Reconnect button on the reference is not reproduced: SCM communications are not modelled.",
             "Chemical names at the right-hand line ends are illegible on the photograph; SubseaSim chemical names are shown.",
-            "The framed region right of photo x = 550 (manifold, additional transmitters) is a SubseaSim addition outside the reference page.",
+            "The framed region right of photo x = 550 (manifold, additional transmitters) holds measurements added beyond the reference page.",
         ],
     },
     "groups": groups,
@@ -518,6 +489,46 @@ multiphase = {
     ],
 }
 
+training = {
+    "extends": "xt_230xp22b_multiphase",
+    "id": "training_integrated",
+    "name": "Training - integrated three-phase production, sand and choke erosion",
+    "description": ("Guided exercise scenario: the three-phase XT well starts SHUT IN (production wing valve closed) with a complete "
+                    "ILLUSTRATIVE sand / choke input set, so the whole chain - production, MPFM, sanding, sand transport, choke "
+                    "erosion and the maintenance recommendation - can be followed in one session. Not field data."),
+    "element_overrides": {"PWV": {"initial_position_pct": 0}},
+    "sand_choke": sc["sand_choke_example"],
+    "briefing": ["Start Training > 'Exercise 7 - Integrated production, sand and choke health' to be guided step by step."],
+}
+
+# ---- tree-workstation training scenarios (single-phase, dynamic) -----------
+TRAINING_XT = {
+    "ex03_choke_operation": {
+        "name": "Exercise 3 - Choke operation (illustrative)",
+        "description": "Tree workstation, single-phase producer in the quasi-steady model with the production choke at 20 % opening. "
+                       "Used by training Exercise 3. All data ILLUSTRATIVE.",
+        "dynamics": {"mode": "steady"},
+        "element_overrides": {"CHOKE": {"initial_position_pct": 20}},
+        "briefing": ["Start Training > 'Exercise 3 - Choke operation' to be guided step by step."],
+    },
+    "training_startup": {
+        "name": "Training - well start-up from shut-in",
+        "description": "Tree workstation, single-phase producer fully SHUT IN (SCSSV, PMV, PWV closed; choke at 0 %). Used by "
+                       "Exercise 2. All data ILLUSTRATIVE.",
+        "element_overrides": {"SCSSV": {"initial_position_pct": 0}, "PMV": {"initial_position_pct": 0},
+                              "PWV": {"initial_position_pct": 0}, "CHOKE": {"initial_position_pct": 0}},
+        "briefing": ["Start Training > 'Exercise 2 - Well start-up from shut-in' to be guided step by step."],
+    },
+    "training_leaking_pmv": {
+        "name": "Training - PMV-101 leak test",
+        "description": "Tree workstation, single-phase producer; PMV-101 has a small seat leak (Cd.A 0.0001 mm2) to be found by an "
+                       "inflow test. Used by Exercise 8. All data ILLUSTRATIVE - acceptance limits are training values.",
+        "element_overrides": {"PMV": {"seat_leak_area_mm2": 0.0001}},
+        "briefing": ["Start Training > 'Exercise 8 - Leak test of the production master valve' to be guided step by step."],
+    },
+}
+
+
 if __name__ == "__main__":
     root = HERE.parent / "app" / "scenarios"
     (root / "layouts").mkdir(exist_ok=True)
@@ -525,6 +536,11 @@ if __name__ == "__main__":
         json.dump(sc, f, indent=2)
     with open(root / "data" / "xt_230xp22b_multiphase.json", "w", encoding="utf-8") as f:
         json.dump(multiphase, f, indent=2)
+    with open(root / "data" / "training_integrated.json", "w", encoding="utf-8") as f:
+        json.dump(training, f, indent=2)
+    for sid, extra in TRAINING_XT.items():
+        with open(root / "data" / f"{sid}.json", "w", encoding="utf-8") as f:
+            json.dump({"extends": "xt_230xp22b", "id": sid, **extra}, f, indent=2)
     with open(root / "layouts" / "xt_230xp22b.json", "w", encoding="utf-8") as f:
         json.dump(layout_doc, f, indent=2)
     print("written xt_230xp22b scenario + layout")

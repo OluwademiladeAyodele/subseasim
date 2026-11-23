@@ -20,7 +20,7 @@ network:
 
 Consequences:
 
-- sand reaches the tree, the choke, the detector (XT3001, on the choke
+- sand reaches the tree, the choke, the detector (SDT-101, on the choke
   outlet) and the manifold with the fluid transit time;
 - **it stops when the flow stops**;
 - it reverses with reverse flow.

@@ -19,7 +19,11 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
   const temps = prod.filter((i) => i.type === "temperature");
   const dp = prod.find((i) => i.type === "differential_pressure");
   const mp = state.multiphase;
-  const pick = [pressures[1] ?? pressures[0], pressures[0], mp ? undefined : dp, temps[temps.length - 1]].filter(
+  // Tree workstation: the readings an operator checks first - bottom hole, tree cavity (wellhead), downstream of the choke
+  // and the choke differential. Other scenarios: the first production pressures, the choke dP and a temperature.
+  const byTag = new Map(state.instruments.map((i) => [i.tag, i]));
+  const preferred = ["PT-001", "PT-104", "PT-103", "PDT-101"].map((t) => byTag.get(t)).filter((x): x is InstrumentSnapshot => !!x);
+  const pick = (preferred.length >= 3 ? preferred.slice(0, mp ? 3 : 4) : [pressures[1] ?? pressures[0], pressures[0], mp ? undefined : dp, temps[temps.length - 1]]).filter(
     (x, i, a): x is InstrumentSnapshot => !!x && a.indexOf(x) === i,
   );
   const nodeRate = (i: InstrumentSnapshot) => (i.node ? state.nodes.find((n) => n.id === i.node)?.rate_pa_s ?? 0 : 0);
@@ -28,7 +32,8 @@ export function KeyMeasurements({ state, prefs, onSelect }: { state: SimulationS
   const ss = state.steady_reference?.q_m3s;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    // fixed two-line label / sub-line height: the cards keep their size as live values change (no layout shift)
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6 [&_.stat-label]:min-h-[2.75em] [&_.stat-sub]:min-h-[2.75em]">
       <Stat
         testId="kpi-flow"
         label={mp ? "Production (reservoir volume)" : dynamic ? "Flowline flow" : "Production flow"}

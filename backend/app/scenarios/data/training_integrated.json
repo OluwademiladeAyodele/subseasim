@@ -1,0 +1,137 @@
+{
+  "extends": "xt_230xp22b_multiphase",
+  "id": "training_integrated",
+  "name": "Training - integrated three-phase production, sand and choke erosion",
+  "description": "Guided exercise scenario: the three-phase XT well starts SHUT IN (production wing valve closed) with a complete ILLUSTRATIVE sand / choke input set, so the whole chain - production, MPFM, sanding, sand transport, choke erosion and the maintenance recommendation - can be followed in one session. Not field data.",
+  "element_overrides": {
+    "PWV": {
+      "initial_position_pct": 0
+    }
+  },
+  "sand_choke": {
+    "geomechanics": {
+      "depth_tvd_m": 3700,
+      "overburden_gradient_bar_m": 0.18,
+      "min_horizontal_stress_gradient_bar_m": 0.15,
+      "max_horizontal_stress_gradient_bar_m": 0.16,
+      "initial_reservoir_pressure_bara": 380,
+      "stress_path_coefficient": 0.6,
+      "twc_strength_mpa": 27.0,
+      "biot_coefficient": 0.9,
+      "poisson_ratio": 0.25,
+      "water_weakening_fraction": 0.3,
+      "porosity": 0.27,
+      "permeability_md": 800
+    },
+    "completion": {
+      "completion_type": "cased_perforated_standalone_screens",
+      "perforation_diameter_mm": 18,
+      "shot_density_spm": 40,
+      "perforated_interval_m": 30,
+      "screen_type": "premium_mesh",
+      "screen_aperture_um": 250,
+      "bridging_factor": 2.0
+    },
+    "sand": {
+      "grain_density_kg_m3": 2650,
+      "d10_um": 60,
+      "d50_um": 150,
+      "d90_um": 300,
+      "mode": "predictive",
+      "rate_coefficient_kg_m3": 0.05,
+      "rate_exponent": 1.5,
+      "measured_unit": "kg_d"
+    },
+    "detector": {
+      "tag": "SDT-101"
+    },
+    "cavitation": {
+      "fl_table": [
+        {
+          "opening_pct": 10,
+          "fl": 0.95
+        },
+        {
+          "opening_pct": 50,
+          "fl": 0.9
+        },
+        {
+          "opening_pct": 100,
+          "fl": 0.85
+        }
+      ],
+      "fl_source": "ILLUSTRATIVE - replace with the manufacturer's FL for this trim",
+      "sigma_incipient": 2.0,
+      "sigma_constant": 1.7,
+      "sigma_damage": 1.4,
+      "threshold_source": "ILLUSTRATIVE - replace with the manufacturer's sigma limits for this trim"
+    },
+    "choke": {
+      "design": "plug_and_cage",
+      "model_label": "Plug & multi-hole cage choke (F500) - ILLUSTRATIVE geometry",
+      "max_cv": 161.0,
+      "min_controllable_cv": 1.61,
+      "actuator_steps": 165,
+      "stroke_mm": 60,
+      "cage_inner_diameter_mm": 90,
+      "cage_wall_thickness_mm": 12,
+      "plug_diameter_mm": 90,
+      "choke_outlet_bore_mm": 127,
+      "gallery_diameter_mm": 127,
+      "body_wall_thickness_mm": 25,
+      "trim_material": "tungsten_carbide_cs10",
+      "body_material": "inconel",
+      "trim_impact_angle_deg": 30,
+      "plug_share": 0.3,
+      "erosion_feedback": true,
+      "hole_rows": [
+        {
+          "axial_position_mm": 3,
+          "diameter_mm": 4,
+          "count": 4
+        },
+        {
+          "axial_position_mm": 8,
+          "diameter_mm": 5,
+          "count": 4
+        },
+        {
+          "axial_position_mm": 14,
+          "diameter_mm": 6,
+          "count": 6
+        },
+        {
+          "axial_position_mm": 21,
+          "diameter_mm": 8,
+          "count": 6
+        },
+        {
+          "axial_position_mm": 30,
+          "diameter_mm": 10,
+          "count": 8
+        },
+        {
+          "axial_position_mm": 41,
+          "diameter_mm": 12,
+          "count": 8
+        },
+        {
+          "axial_position_mm": 53,
+          "diameter_mm": 12,
+          "count": 8
+        }
+      ]
+    },
+    "acceptance": {
+      "max_hole_diameter_increase_mm": 1.5,
+      "max_cv_increase_pct": 15,
+      "max_plug_loss_mm": 2.0,
+      "max_body_wall_loss_mm": 3.0,
+      "max_outlet_wall_loss_mm": 3.0,
+      "reference_step": 82
+    }
+  },
+  "briefing": [
+    "Start Training > 'Exercise 7 - Integrated production, sand and choke health' to be guided step by step."
+  ]
+}

@@ -53,3 +53,25 @@ Samples are recorded against **simulated time**: every `max(sample_interval_s, t
 | `HISTORY_LENGTH` | 7200 | trend samples kept |
 
 Cost: about 0.8 ms of CPU per dynamic step for the base system, so 600× uses roughly half of one core per running session.
+
+## Compute budget per tick (server responsiveness)
+
+Each loop tick (default 0.25 s) gives the RUNNING sessions together at most
+60 % of the tick period of computation (`COMPUTE_SHARE` in
+`backend/app/sessions.py`). The share is split between the running sessions,
+with a minimum of 30 ms each.
+
+If a session cannot compute the requested simulated interval within its
+share, the remaining whole steps are **dropped, not queued**:
+
+- simulated time advances less than requested;
+- `clock.achieved_speed` shows the real speed;
+- `clock.compute_limited` is true.
+
+The trajectory per simulated second is unchanged, because every step is still
+a full fixed step on the same grid.
+
+The heavier three-phase model (PVT, MPFM, sand and erosion) typically runs at
+50–100x during large transients even when 600x is selected. Before this
+budget existed, such a session could stall the whole server for several
+seconds per tick, so commands and live updates of every user froze.

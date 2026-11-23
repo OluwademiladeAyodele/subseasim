@@ -197,6 +197,7 @@ def test_sand_follows_drawdown_and_reaches_the_choke_with_the_flow(eng):
     eng.advance(3 * 3600)
     r2 = eng.snapshot(False)["sand_choke"]
     assert r2["sand"]["at_choke_kg_d"] == pytest.approx(r2["sand"]["produced_kg_d"], rel=0.05)
+    assert r2["detector"]["tag"] == "SDT-101"
     assert r2["detector"]["reading_g_s"] is not None and r2["detector"]["alarm"]
     crit = {c["key"]: c for c in r2["criteria"]}
     assert crit["hole"]["rate_per_year"] > 0 and crit["hole"]["life_days"]["p10"] < crit["hole"]["life_days"]["p50"] < crit["hole"]["life_days"]["p90"]
@@ -320,3 +321,9 @@ def test_inputs_survive_reset_and_api():
         bad = dict(inputs)
         bad["sand"] = {**inputs["sand"], "measured_unit": "furlongs"}
         assert client.put(f"/api/sessions/{sid}/sand-choke/inputs", json=bad).status_code == 422
+
+
+def test_saved_inputs_with_the_old_detector_tag_are_renamed():
+    from app.models.sand import SandChokeInputs
+    inp = SandChokeInputs.model_validate({"detector": {"tag": "XT3001", "alarm_threshold_g_s": 0.1}})
+    assert inp.detector.tag == "SDT-101" and inp.detector.alarm_threshold_g_s == 0.1

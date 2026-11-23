@@ -10,8 +10,9 @@ and flowline resistances, 50 % opening does NOT give 50 % of maximum flow.
 
 Extension point: replace ``capacity`` with a lookup of manufacturer Cv vs
 step data, or a multiphase critical/sub-critical choke correlation
-(Release 2/3). Release 1 does NOT model choked (critical) flow, cavitation
-or flashing; diagnostics warn when the operating point approaches them.
+(Release 2/3). Critical multiphase flow is handled by the Sachdeva model
+(multiphase/correlations.py); cavitation and flashing are SCREENED in
+choke/cavitation.py (docs/CHOKE_CAVITATION_MODEL.md), not simulated.
 """
 
 from __future__ import annotations

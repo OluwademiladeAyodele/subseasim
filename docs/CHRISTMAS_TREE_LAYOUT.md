@@ -22,7 +22,7 @@ The values respond to valve operations through the dynamic model.
 | What | File | Contains |
 |---|---|---|
 | Schematic layout | `backend/app/scenarios/layouts/xt_230xp22b.json` | Positions only: component id, type, x, y, w, h, rotation, ports, flow path, tap point, label offset, group. No physics. |
-| Engineering configuration | `backend/app/scenarios/data/xt_230xp22b.json` | Nodes, elements, instruments, chemicals, control hydraulics, display-tag aliases. |
+| Engineering configuration | `backend/app/scenarios/data/xt_230xp22b.json` | Nodes, elements, instruments, chemicals, control hydraulics. |
 | Generator (source of both) | `backend/scripts/generate_xt_230xp22b.py` | Photo-pixel measurements and the topology changes relative to `subsea_dynamic_base`. |
 | Schema | `backend/app/models/schematic.py` | `SchematicLayout` (validated on load). |
 | Renderer | `frontend/src/schematic/XtSchematic.tsx` | Reusable SVG symbols; all state from the snapshot. |
@@ -69,9 +69,9 @@ made in the generator.
 | Tree cap | y 86 |
 | Wing junction | y 145 |
 | XOV entry | y 196 |
-| PMV3004 | y 279 |
-| SCSSV3003 | y 326 |
-| PTT3002 / PTT3003 tap | y 350 |
+| PMV-101 | y 279 |
+| SCSSV-101 | y 326 |
+| PTT-001 / PTT-002 tap | y 350 |
 | Downhole chemical entry | y 363 |
 
 **Annulus bore (x = 202)**
@@ -79,55 +79,55 @@ made in the generator.
 | Item | Position |
 |---|---|
 | AWV branch | y 139 |
-| PT3030 tap | y 222 |
-| PT3031 tap | y 249 |
-| AMV3030 | y 279 |
+| PT-402 tap | y 222 |
+| PT-401 tap | y 249 |
+| AMV-101 | y 279 |
 
 **Service line (y = 196)**
 
 | Item | Position |
 |---|---|
-| SLV3035 | x 82 |
-| PT3014 tap | x 124 |
+| SLV-101 | x 82 |
+| PT-404 tap | x 124 |
 | Junction with the AWV branch | x 144 |
-| XOV3032 | x 171 |
+| XOV-101 | x 171 |
 
 **Production wing (y = 145)**
 
 | Item | Position |
 |---|---|
-| PTT3004 tap | x 289 |
-| PWV3005 | x 441 |
-| PCV3006 (angle choke, outlet down) | x 481 |
+| PTT-107 tap | x 289 |
+| PWV-101 | x 441 |
+| CHK-101 (angle choke, outlet down) | x 481 |
 
 **Choke outlet (x = 481)**
 
 | Item | Position |
 |---|---|
-| XT3001 tap | y 184 |
-| Inline device | y 200 |
-| PTT3008 tap | y 227 |
-| PTT3009 tap | y 260 |
+| SDT-101 tap (sand detector) | y 184 |
+| SDT-101 sensor | y 200 |
+| PTT-103 tap | y 227 |
+| PTT-106 tap | y 260 |
 
-**Chemical injection (CIV, then metering valve CCV, then connector at x 405)**
+**Chemical injection (CIV, then metering valve CIMV, then connector at x 405)**
 
 | Line | Valves | Joins the wing at |
 |---|---|---|
-| y 176 | CIV3027 at x 315, CCV3026 at x 375 | x 301 |
-| y 203 | CIV3025 at x 316 | x 285 |
-| y 232 | CIV3023 at x 317, CCV3022 at x 375 | x 277 |
+| y 176 | CIV-302 at x 315, CIMV-302 at x 375 | x 301 |
+| y 203 | CIV-303 at x 316 | x 285 |
+| y 232 | CIV-301 at x 317, CIMV-301 at x 375 | x 277 |
 
 **Methanol injection valves (header at x 350)**
 
 | Valve | Line | Joins the wing at |
 |---|---|---|
-| MIV3015 | y 265 | x 425 (upstream of PWV) |
-| MIV3016 | y 290 | x 455 (between PWV and the choke) |
+| MIV-302 | y 265 | x 425 (upstream of PWV) |
+| MIV-303 | y 290 | x 455 (between PWV and the choke) |
 
 **Downhole chemical line (y 356)**
 
-- CCV3036 at x 97.
-- CIV3021 at x 130.
+- CIMV-304 at x 97.
+- CIV-304 at x 130.
 
 **Selector valves (frame 385–535 × 296–446)**
 
@@ -142,62 +142,44 @@ made in the generator.
 `test_reference_positions_are_preserved` checks the main components against
 this table to within 1.5 px.
 
-## 3. Tags (display aliases)
+## 3. Tags
 
-**Engineering tags stay the stable identifiers.** Tags such as PMV-101 and
-CHK-101 are what the model, the API, the tests and the training exercises use.
+**One plain engineering tag per item.** The workstation, the API, the tests
+and the training exercises all use the same short tags. There are no display
+aliases (`tag_aliases` is empty for this scenario).
 
-**Reference tags are display aliases.** The tag numbers on the reference page
-are stored as aliases in `tag_aliases`. Each alias has a provenance status:
+| Prefix | Item | Examples |
+|---|---|---|
+| Valve type + 101 | Tree and annulus valves | SCSSV-101, PMV-101, PWV-101, SV-101, AMV-101, AWV-101, XOV-101, SLV-101 |
+| CHK | Production choke | CHK-101 |
+| CIV / CIMV | Chemical injection and metering valves | CIV-301 to CIV-304, CIMV-301 to CIMV-304 |
+| MIV | Methanol injection valves | MIV-302, MIV-303 |
+| PT / TT / PTT | Pressure, temperature, combined P+T panel | PT-104, TT-104, PTT-104 |
+| PDT | Differential pressure | PDT-101 (choke), PDT-401 (SLV) |
+| FT | Flow | FT-101 |
+| HSV | Hydraulic selector valves | HSV-101 to HSV-104 |
+| SDT | Sand detector | SDT-101 (choke outlet; old saves tagged XT3001 are renamed on load) |
+| PT-6xx | Hydraulic supply and header pressures | PT-601 (LP), PT-602 (HP), PT-611/612/621/622 (headers) |
 
-| Status | Meaning |
-|---|---|
-| verified | read confidently from the reference |
-| uncertain | partly legible – verify against the P&ID (drawn with a dotted border) |
-| placeholder | not tagged on the reference (selector valves) |
-| addition | SubseaSim component not on the reference page (dashed border) |
+**Number ranges.** 0xx downhole, 1xx production bore and wing, 2xx flowline
+and manifold, 3xx chemical injection, 4xx annulus and service line, 6xx
+control hydraulics.
 
-**Verified tags**
-
-- Valves: AWV3034, AMV3030, PMV3004, PWV3005, SCSSV3003, PCV3006, XOV3032,
-  SLV3035.
-- Transmitters: PT/TT3002, PT/TT3003, PT/TT3004, PT/TT3005, PT/TT3008,
-  PT/TT3009, PT3014, PT3030, PD3014.
-
-**Uncertain tags**
-
-- Chemical injection valves: CIV3021, CIV3023, CIV3025, CIV3027, CCV3022,
-  CCV3026, CCV3036.
-- Methanol injection valves: MIV3015, MIV3016.
-- Hydraulic pressure panels: LPHP1, HPHP1, LP3096, LP3097, HP3098, HP3099.
-- PT3031, which may read PT3011 on the photograph.
-
-**Placeholders.** SEL-LP-A/B and SEL-HP-A/B (the selector valves carry no tag on
-the reference page).
-
-**Not assigned.** PT3010, PT3011 and PT3013 could not be located on the
-photograph.
-
-**Where the aliases are accepted and shown**
-
-- The API accepts either tag, for example `POST /valves/PWV3005`.
-- The inspector shows the reference tag, the engineering tag and the alias
-  status.
-- The valves page, instrument table, key measurements and event log display
-  the reference tags.
+**Panels.** A panel showing a pressure and a temperature at one tap is named
+PTT-xxx after its transmitters (PTT-104 shows PT-104 and TT-104).
 
 ## 4. Topology changes relative to `subsea_dynamic_base`
 
 These follow the reference page:
 
-- **Crossover.** XOV3032 connects the service-line junction (downstream of AWV,
+- **Crossover.** XOV-101 connects the service-line junction (downstream of AWV,
   upstream of SLV) to the tree cavity.
 - **Chemical injection points.**
   - The corrosion-inhibitor and biocide lines inject into the production wing,
     upstream of PWV.
   - The downhole chemical line enters below the SCSSV.
 - **Methanol.**
-  - Two methanol injection valves (MIV3015 and MIV3016) are fed from one header
+  - Two methanol injection valves (MIV-302 and MIV-303) are fed from one header
     and inject upstream and downstream of PWV.
   - They are modelled as additional *routes* of the methanol circuit, sharing
     its pump. Their chemical is transported and conserved exactly like the main
@@ -205,19 +187,19 @@ These follow the reference page:
   - The methanol route into the annulus service line is not on the reference
     page and is not part of this scenario. It remains in `subsea_dynamic_base`.
 - **Additional transmitters**, placed at the reference positions:
-  - TT3005: temperature of the tree cavity.
-  - PTT3004: the wing, upstream of PWV.
-  - PTT3003: downhole gauge B.
-  - PTT3009: 30 m downstream of the choke.
-  - PT3014: service-line junction.
-  - PD3014: differential across SLV. The measurement points are assumed from
+  - TT-104: temperature of the tree cavity.
+  - PTT-107: the wing, upstream of PWV.
+  - PTT-002: downhole gauge B.
+  - PTT-106: 30 m downstream of the choke.
+  - PT-404: service-line junction.
+  - PDT-401: differential across SLV. The measurement points are assumed from
     the transmitter's position on the reference.
 
 ### Drawn position vs. measured location
 
-- **PT3031** is drawn above AMV, as on the reference, but measures the
+- **PT-401** is drawn above AMV, as on the reference, but measures the
   A-annulus below AMV.
-- **Transmitters on the same volume read the same.** PTT3004 and PTT3005 both
+- **Transmitters on the same volume read the same.** PTT-107 and PTT-104 both
   sit on the tree cavity volume, so they read the same pressure. The model does
   not resolve friction inside the tree block.
 
@@ -263,6 +245,7 @@ communications. The SCM Reconnect button is therefore not reproduced.
 | Chemical line or its connector | That injection circuit's controls (pump, valves, routes) |
 | Selector valve or hydraulic panel | The control-hydraulics inspector: selector commands, header pressures, HPU trip / restore |
 | SCM Diagnostic | The Diagnostics page |
+| Sand detector SDT-101 | The Sand monitoring page |
 
 **State shown on the drawing**
 
@@ -274,9 +257,6 @@ communications. The SCM Reconnect button is therefore not reproduced.
   - valves: teal = open, red = closed;
   - lines: maroon = production, teal = annulus, blue = control hydraulics.
 
-**XT3001**, the inline device on the choke outlet, is drawn and labelled *not
-modelled*. It is reserved for the sand detector (Stage 5).
-
 ## 7. Verification
 
 **Backend:** `backend/tests/test_xt_workstation.py`. It checks:
@@ -286,7 +266,7 @@ modelled*. It is reserved for the sand detector (Stage 5).
 - reference positions are within tolerance;
 - line ends are connected and components sit on their flow paths;
 - the layout does not affect measurement location;
-- the alias coverage;
+- plain engineering tags (no aliases, unique, one naming pattern);
 - readings are model-calculated and follow inputs and valve operations;
 - LP-loss fail-safe and HP trip behaviour;
 - MIV routes conserve chemical volume.

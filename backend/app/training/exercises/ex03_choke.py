@@ -83,8 +83,12 @@ def capture(engine: SimulationEngine) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------- conditions
+BARRIERS = ("SCSSV-101", "PMV-101", "PWV-101")
+
+
 def _isolation_open(e: SimulationEngine) -> bool:
-    return all(r.actuator.position_pct == 100.0 for r in e.restrictions.values() if isinstance(r, ValveElement))
+    """The production barriers are fully open (annulus, swab and chemical valves are not part of the flow path)."""
+    return all(e.restrictions[t].actuator.position_pct == 100.0 for t in BARRIERS if t in e.restrictions)
 
 
 def _choke_at(target: float):
@@ -197,7 +201,7 @@ def _budget_table(obs: Obs, keys: list[str]) -> dict:
         rows.append([label] + [round(obs[k]["budget_bar"][bk], 2) for k in keys])
     rows.append(["Total = P_res - P_downstream"] + [round(sum(obs[k]["budget_bar"].values()), 2) for k in keys])
     rows.append(["Flow FT-101 [m3/d]"] + [round(obs[k]["q_m3d"], 1) for k in keys])
-    return {"columns": cols, "rows": rows}
+    return {"columns": cols, "rows": rows, "emphasis_rows": [len(rows) - 2, len(rows) - 1]}
 
 
 def _review1(obs: Obs, preds: dict) -> dict:
@@ -252,7 +256,7 @@ EXERCISE = ExerciseDefinition(
         "Interpret how upstream and downstream pressures respond to choke changes.",
     ],
     initial_configuration=[
-        "Illustrative single-phase oil producer (scenario 'Exercise 3 - Choke operation').",
+        "Tree workstation, illustrative single-phase oil producer in the quasi-steady model (scenario 'Exercise 3 - Choke operation').",
         "SCSSV-101, PMV-101 and PWV-101 fully open.",
         "CHK-101 at 20 % opening (generic equal-percentage characteristic, full stroke 180 s).",
         "Reservoir 380 bara / 95 degC, PI 20 (m3/d)/bar; flowline arrival held at 60 bara.",

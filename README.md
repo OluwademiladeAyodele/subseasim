@@ -73,6 +73,12 @@ Every push to `main` redeploys. Things to know:
   replica would split users between two servers.
 * **Redeploys reset running simulations.** Open browsers recover automatically and start a
   fresh session, with a notice.
+* **Simulation records and surrogate models** are stored in SQLite at `/app/data/records.sqlite`.
+  To keep them across redeploys: service → **Volumes** → add a volume with mount path `/app/data`,
+  and set the variable **`RAILWAY_RUN_UID=0`** (Railway volumes are root-owned; the image runs as a
+  non-root user). Without a volume they are lost at every redeploy; if the folder is not writable the
+  Records / Surrogate pages report "Records storage unavailable" (HTTP 503) and the rest works.
+  See [docs/SIMULATION_RECORDS.md](docs/SIMULATION_RECORDS.md).
 * **CPU:** one session at 600× uses about half a CPU core. Size the plan for the number of
   trainees who run at high speed at the same time.
 
@@ -100,9 +106,9 @@ Python versions).
 ## Tests
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest       # 99 tests: engineering, numerics, API, training
-cd frontend && npm test                             # 21 component/unit tests
-cd frontend && npx playwright install chromium && npm run e2e   # 6 end-to-end workflows
+cd backend && .venv/Scripts/python -m pytest       # ~350 tests: engineering, numerics, API, curriculum, records, jobs
+cd frontend && npm test                             # ~60 component/unit tests
+cd frontend && npx playwright install chromium && npm run e2e   # ~23 end-to-end workflows
 ```
 
 ## Using the simulator
@@ -113,7 +119,9 @@ cd frontend && npx playwright install chromium && npm run e2e   # 6 end-to-end w
 3. Use **Conditions** to change reservoir or downstream pressure or fluid properties. The
    operating point is recalculated immediately.
 4. Watch **Trends**, **Instruments**, **Event history** and **Diagnostics**.
-5. **Training → Start exercise** runs Exercise 3.
+5. **Training** lists the intern curriculum: nine guided exercises from workstation familiarisation through
+   start-up, choke operation, shut-in, chemical injection, annulus bleed-off, integrated production, a valve
+   leak test and loss of hydraulic supply. See [docs/TRAINING_CURRICULUM.md](docs/TRAINING_CURRICULUM.md).
 
 ## Configuration
 
@@ -126,6 +134,12 @@ Engineering parameters live only in scenario files.
 
 * [Dynamic simulation model](docs/DYNAMIC_SIMULATION_MODEL.md): Release 2 overview, audit, verification
 * [Pipeline transient model](docs/PIPELINE_TRANSIENT_MODEL.md) · [Chemical transport](docs/CHEMICAL_TRANSPORT_MODEL.md) · [Instrument response](docs/INSTRUMENT_RESPONSE_MODEL.md) · [Simulation time](docs/SIMULATION_TIME_MANAGEMENT.md)
+* [Engineering validation](docs/ENGINEERING_VALIDATION.md) · [Choke erosion](docs/CHOKE_EROSION_MODEL.md) · [Choke maintenance](docs/CHOKE_MAINTENANCE_MODEL.md) · [Choke cavitation](docs/CHOKE_CAVITATION_MODEL.md)
+* [Simulation records](docs/SIMULATION_RECORDS.md): saved assessments, provenance, model versions
+* [Background jobs](docs/BACKGROUND_JOBS.md): long calculations without freezing the server
+* [Scenario comparison and reports](docs/SCENARIO_COMPARISON_AND_REPORTS.md): compare operating options, printable engineering reports
+* [Surrogate models](docs/SURROGATE_MODELS.md): fast predictions with uncertainty inside a validated envelope
+* [Training curriculum](docs/TRAINING_CURRICULUM.md): the nine guided exercises for interns
 * [Architecture](docs/ARCHITECTURE.md)
 * [Engineering assumptions](docs/ENGINEERING_ASSUMPTIONS.md): units, equations, limitations
 * [Simulation model](docs/SIMULATION_MODEL.md): modules, step sequence, CoolProp evaluation

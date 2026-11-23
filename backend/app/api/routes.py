@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
 
 from app.api.schemas import (
     BlackOilUpdate,
@@ -16,6 +16,11 @@ from app.api.schemas import (
     LifecycleRequest,
     ModeRequest,
     PumpRequest,
+    JobRequest,
+    RecordRequest,
+    SurrogateImportRequest,
+    SurrogatePredictRequest,
+    SandCsvRequest,
     SelectorCommandRequest,
     SupplyRequest,
     LoadScenarioRequest,
@@ -29,6 +34,9 @@ from app.scenarios.loader import ScenarioNotFound, get_scenario, list_scenarios
 from app.sessions import Session, SessionLimitReached, manager
 from app.simulation.components.elements import CommandRejected
 from app.simulation.engine import InvalidOperatingInput
+from app import job_kinds  # noqa: F401 - registers the job kinds
+from app.jobs import JobRejected, jobs
+from app.storage import assessment, records
 from app.training.framework import TrainingError
 from app.training.registry import EXERCISES
 
@@ -275,6 +283,216 @@ async def sand_inputs(sid: str, req: SandChokeInputs) -> dict:
     s = _session(sid)
     s.engine.set_sand_inputs(req)
     return await _after_change(s)
+
+
+@router.post("/sessions/{sid}/sand-choke/measurements/csv")
+async def sand_measurements_csv(sid: str, req: SandCsvRequest) -> dict:
+    from app.simulation.sand.measurements import CsvImportError
+
+    s = _session(sid)
+    try:
+        n = s.engine.import_sand_measurements(req.csv, req.replace)
+    except CsvImportError as exc:
+        raise HTTPException(422, {"message": str(exc), "errors": exc.errors}) from None
+    except CommandRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    out = await _after_change(s)
+    out["imported"] = n
+    return out
+
+
+@router.post("/sessions/{sid}/jobs", status_code=202)
+async def submit_job(sid: str, req: JobRequest) -> dict:
+    """Start a background job (e.g. kind 'sand_fast_forward', params {days})."""
+    s = _session(sid)
+    try:
+        job = jobs.submit(s, req.kind, req.params, is_alive=lambda: manager.sessions.get(sid) is s)
+    except JobRejected as exc:
+        raise HTTPException(409, str(exc)) from None
+    return job.to_dict()
+
+
+@router.get("/sessions/{sid}/jobs")
+def list_jobs(sid: str) -> list[dict]:
+    _session(sid)
+    return [j.to_dict() for j in jobs.for_session(sid)]
+
+
+@router.get("/jobs/{jid}")
+def get_job(jid: str) -> dict:
+    try:
+        return jobs.get(jid).to_dict()
+    except KeyError:
+        raise HTTPException(404, f"job {jid} not found") from None
+
+
+@router.post("/jobs/{jid}/cancel")
+def cancel_job(jid: str) -> dict:
+    try:
+        return jobs.cancel(jid).to_dict()
+    except KeyError:
+        raise HTTPException(404, f"job {jid} not found") from None
+
+
+# ------------------------------------------------------------ surrogates
+_SURROGATE_CACHE: dict = {}
+
+
+def _surrogate(sid_: str):
+    from app.surrogates.model import Surrogate
+
+    if sid_ not in _SURROGATE_CACHE:
+        try:
+            body = records.get_surrogate_body(sid_)
+        except records.RecordNotFound:
+            raise HTTPException(404, f"surrogate {sid_} not found") from None
+        _SURROGATE_CACHE[sid_] = Surrogate.from_dict(body)
+        if len(_SURROGATE_CACHE) > 20:
+            _SURROGATE_CACHE.pop(next(iter(_SURROGATE_CACHE)))
+    return _SURROGATE_CACHE[sid_]
+
+
+@router.get("/surrogates")
+def list_surrogates() -> list[dict]:
+    return records.list_surrogates()
+
+
+@router.get("/surrogates/{gid}")
+def get_surrogate(gid: str) -> dict:
+    return {"id": gid} | _surrogate(gid).card()
+
+
+@router.post("/surrogates/{gid}/predict")
+def surrogate_predict(gid: str, req: SurrogatePredictRequest) -> dict:
+    try:
+        return _surrogate(gid).predict(req.inputs)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+@router.post("/sessions/{sid}/surrogates/{gid}/check")
+def surrogate_check(sid: str, gid: str, req: SurrogatePredictRequest) -> dict:
+    """High-fidelity check: solve the point on a steady twin of the session
+    (the simulator) and compare it with the surrogate prediction."""
+    from app.studies.comparison import Variant, _apply, metrics, steady_twin
+
+    s = _session(sid)
+    sur = _surrogate(gid)
+    try:
+        pred = sur.predict(req.inputs)
+        tw = steady_twin(s.engine)
+        _apply(tw, Variant(label="check", **{k: req.inputs[k] for k in sur.inputs}))
+    except (ValueError, CommandRejected) as exc:
+        raise HTTPException(422, str(exc)) from None
+    m = metrics(tw)
+    rows = {}
+    for k, p in pred["outputs"].items():
+        sim = m.get(k)
+        rows[k] = {"surrogate": p["mean"], "std": p["std"], "simulator": sim,
+                   "difference": None if sim is None else p["mean"] - sim,
+                   "within_95": None if sim is None else abs(p["mean"] - sim) <= 1.959964 * max(p["std"], 1e-12)}
+    return {"inputs": pred["inputs"], "envelope": pred["envelope"], "outputs": rows,
+            "simulator": "SubseaSim steady twin of this session (high-fidelity reference for a simulator-trained surrogate)"}
+
+
+@router.post("/surrogates/import", status_code=201)
+def surrogate_import(req: SurrogateImportRequest) -> dict:
+    """Train a surrogate on IMPORTED cases (CFD, experiment, vendor, field or
+    simulator) given as CSV with the input / output columns and ``source``."""
+    from app.surrogates.doe import parse_cases_csv
+    from app.surrogates.model import INPUTS, OUTPUTS, build
+
+    bad = [k for k in req.inputs if k not in INPUTS] + [k for k in req.outputs if k not in OUTPUTS]
+    if bad:
+        raise HTTPException(422, f"unknown input / output key(s): {', '.join(bad)}")
+    try:
+        cases = parse_cases_csv(req.csv, req.inputs, req.outputs)
+        sur = build(req.name.strip(), req.method, req.inputs, req.outputs, cases, notes=["trained on imported cases"])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    row = records.save_surrogate(sur)
+    _SURROGATE_CACHE[row["id"]] = sur
+    return row | {"card": sur.card()}
+
+
+@router.delete("/surrogates/{gid}", status_code=204)
+def delete_surrogate(gid: str) -> Response:
+    try:
+        records.delete_surrogate(gid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"surrogate {gid} not found") from None
+    _SURROGATE_CACHE.pop(gid, None)
+    return Response(status_code=204)
+
+
+@router.post("/sessions/{sid}/records", status_code=201)
+async def save_record(sid: str, req: RecordRequest) -> dict:
+    """Save the current assessment of a session as an immutable record."""
+    s = _session(sid)
+    body = assessment.build_record(s.engine, sid)
+    if req.comparison_job_id:
+        try:
+            job = jobs.get(req.comparison_job_id)
+        except KeyError:
+            raise HTTPException(404, f"job {req.comparison_job_id} not found") from None
+        if job.session_id != sid or job.kind != "scenario_comparison" or job.state != "completed":
+            raise HTTPException(409, "only a COMPLETED scenario comparison of this session can be attached")
+        body["comparison"] = job.result
+    row = records.save(body, req.label.strip(), req.notes)
+    s.engine.events.add(s.engine.time_s, "instrument", f"Simulation record saved: '{row['label']}'")
+    await s.broadcast()
+    return row
+
+
+@router.get("/records")
+def list_records(scenario_id: str | None = None, limit: int = 100) -> list[dict]:
+    return records.list_records(scenario_id, limit)
+
+
+@router.get("/records/{rid}")
+def get_record(rid: str) -> dict:
+    try:
+        return records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+
+
+@router.get("/records/{rid}/export")
+def export_record(rid: str) -> Response:
+    import json
+
+    try:
+        body = records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    name = "".join(c if c.isalnum() or c in "-_" else "_" for c in body["label"])[:60] or "record"
+    return Response(json.dumps(body, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="subseasim_{name}_{rid[:8]}.json"'})
+
+
+@router.get("/records/{rid}/report")
+def record_report(rid: str, download: bool = False) -> Response:
+    """Printable engineering report (HTML) of a saved record."""
+    from app.reports.report import render
+
+    try:
+        body = records.get(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    headers = {}
+    if download:
+        name = "".join(c if c.isalnum() or c in "-_" else "_" for c in body["label"])[:60] or "report"
+        headers["Content-Disposition"] = f'attachment; filename="subseasim_report_{name}_{rid[:8]}.html"'
+    return Response(render(body), media_type="text/html; charset=utf-8", headers=headers)
+
+
+@router.delete("/records/{rid}", status_code=204)
+def delete_record(rid: str) -> Response:
+    try:
+        records.delete(rid)
+    except records.RecordNotFound:
+        raise HTTPException(404, f"record {rid} not found") from None
+    return Response(status_code=204)
 
 
 @router.post("/sessions/{sid}/sand-choke/example")

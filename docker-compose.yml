@@ -8,4 +8,9 @@ services:
       - "8000:8000"
     environment:
       SUBSEASIM_MAX_SESSIONS: "50"
+    volumes:
+      - subseasim-data:/app/data   # simulation records (SQLite)
     restart: unless-stopped
+
+volumes:
+  subseasim-data:

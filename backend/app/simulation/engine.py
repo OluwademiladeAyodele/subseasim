@@ -27,6 +27,7 @@ The engine is advanced only by ``advance(dt)`` in simulation seconds.
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -118,6 +119,7 @@ class SimulationEngine:
         self._fluid_model_override: str | None = None
         #: Sand & choke inputs entered in this session (survive reset / model switches).
         self._sand_inputs: SandChokeInputs | None = None
+        self.sand_inputs_origin = self._preset_origin(scenario)
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
@@ -168,6 +170,8 @@ class SimulationEngine:
         self._settle_pending: str | None = None
         self._settle_since: float | None = None
         self.achieved_speed: float | None = None
+        #: True when the last advance was cut short by the wall-time budget.
+        self.budget_limited = False
         self.hyd: HydraulicResult | None = None
         self.ctrl = ControlHydraulics(scenario.control_hydraulics) if scenario.control_hydraulics else None
         self.sand: SandChokeSystem | None = None
@@ -239,7 +243,16 @@ class SimulationEngine:
             return self._sand_inputs
         return self.scenario.sand_choke.model_copy(deep=True) if self.scenario.sand_choke is not None else None
 
-    def set_sand_inputs(self, inputs: SandChokeInputs, label: str = "updated") -> None:
+    @staticmethod
+    def _preset_origin(scenario) -> str:
+        sc, ex = scenario.sand_choke, scenario.sand_choke_example
+        return "illustrative example" if sc is not None and ex is not None and sc == ex else "scenario preset"
+
+    def set_sand_inputs(self, inputs: SandChokeInputs, label: str = "updated", origin: str | None = None) -> None:
+        """``origin`` (provenance of the input set): None = edited by the user."""
+        if origin is None:
+            origin = "edited illustrative example" if "illustrative" in self.sand_inputs_origin else "user-entered"
+        self.sand_inputs_origin = origin
         self._sand_inputs = inputs
         configure_choke(production_choke(self), inputs)
         if self.bo is not None:
@@ -252,22 +265,72 @@ class SimulationEngine:
             self.dyn.net.refresh_restrictions()
         self.events.add(self.time_s, "instrument", f"Sand & choke inputs {label}: predictions recalculated"
                         + ("" if self.bo is not None else " (sand and erosion need the three-phase fluid model)"))
+        if self.sand is not None and inputs.sand.measurements:
+            ab = self.sand.measured_history()["abnormal"]
+            if ab["flag"]:
+                self.events.add(self.time_s, "alarm", f"Measured sand: {ab['text']}", component=self.sand.choke.tag if self.sand.choke else None,
+                                severity="warning")
         self._record_sample(force=True)
+
+    def import_sand_measurements(self, csv_text: str, replace: bool = False) -> int:
+        """Import measured sand records from CSV (atomic: an invalid line rejects the file)."""
+        from app.simulation.sand import measurements as smeas
+
+        base = self.sand_inputs
+        if base is None:
+            raise CommandRejected("this scenario has no sand / choke model")
+        recs = smeas.parse_csv(csv_text)
+        old = [] if replace else list(base.sand.measurements)
+        merged = old + recs
+        if len(merged) > 5000:
+            raise CommandRejected(f"too many records ({len(merged)} > 5000)")
+        inputs = base.model_copy(deep=True)
+        inputs.sand.measurements = merged
+        self.set_sand_inputs(inputs, f"measured sand history {'replaced' if replace else 'extended'} ({len(recs)} record(s) imported)",
+                             origin=self.sand_inputs_origin)
+        return len(recs)
 
     def load_sand_example(self) -> None:
         if self.scenario.sand_choke_example is None:
             raise CommandRejected("this scenario has no illustrative sand / choke example")
-        self.set_sand_inputs(self.scenario.sand_choke_example.model_copy(deep=True), "replaced by the ILLUSTRATIVE example set")
+        self.set_sand_inputs(self.scenario.sand_choke_example.model_copy(deep=True), "replaced by the ILLUSTRATIVE example set",
+                             origin="illustrative example")
 
     def sand_fast_forward(self, days: float) -> None:
+        for _ in self.sand_fast_forward_steps(days):
+            pass
+
+    def sand_fast_forward_steps(self, days: float):
+        """Generator: fast-forward choke wear one day per step, yielding
+        (fraction done, message). Closing it early (job cancelled) keeps the
+        days already integrated and logs exactly how many."""
         if self.sand is None:
             raise CommandRejected("sand and choke erosion need the three-phase fluid model")
-        self.sand.fast_forward(days)
-        self.events.add(self.time_s, "instrument",
-                        f"Choke wear fast-forwarded {days:g} days at the current operating point (quasi-steady: sand rate, opening "
-                        f"and differential held constant); trim service time now {self.sand.service_s / 86400:.0f} days")
-        self._sand_events(force=True)
-        self._record_sample(force=True)
+        sand = self.sand
+        inputs = sand.inputs
+        done = 0.0
+        finished = False
+        try:
+            for d in sand.fast_forward_steps(days):
+                if self.sand is not sand or sand.inputs is not inputs:
+                    from app.jobs import JobAborted
+
+                    raise JobAborted(f"sand / choke inputs changed after {done:g} of {days:g} days - fast-forward stopped "
+                                     "(the days done are kept)")
+                done += d
+                yield min(done / days, 1.0), f"{done:.0f} of {days:g} days"
+            finished = True
+        finally:
+            if self.sand is sand:
+                if not finished:
+                    sand._update_rates_only()
+                what = (f"Choke wear fast-forwarded {days:g} days" if finished
+                        else f"Choke wear fast-forward STOPPED after {done:.0f} of {days:g} days (the days done are kept)")
+                self.events.add(self.time_s, "instrument",
+                                f"{what} at the current operating point (quasi-steady: sand rate, opening and differential held "
+                                f"constant); trim service time now {sand.service_s / 86400:.0f} days")
+                self._sand_events(force=True)
+                self._record_sample(force=True)
 
     def _sand_events(self, force: bool = False) -> None:
         s = self.sand
@@ -410,11 +473,15 @@ class SimulationEngine:
         self._measure()
 
     # ------------------------------------------------------------------- time
-    def advance(self, dt_total: float) -> None:
+    def advance(self, dt_total: float, wall_budget_s: float | None = None) -> None:
+        """Advance by ``dt_total`` simulated seconds. With ``wall_budget_s``,
+        stop computing once that much wall time is used: the remaining
+        simulated time is dropped (the simulation runs slower than requested
+        and ``achieved_speed`` reports it) instead of stalling the server."""
         if self.status != "running" or dt_total <= 0:
             return
         if self.dyn is not None:
-            self._advance_dynamic(dt_total)
+            self._advance_dynamic(dt_total, wall_budget_s)
             return
         moved = False
         for dt in substeps(dt_total, self.settings.max_substep_s):
@@ -440,14 +507,21 @@ class SimulationEngine:
         self._check_outcomes()
         self._record_sample()
 
-    def _advance_dynamic(self, dt_total: float) -> None:
+    def _advance_dynamic(self, dt_total: float, wall_budget_s: float | None = None) -> None:
         """Integrate on a fixed global step grid: results are identical for
-        any partitioning of the requested interval (deterministic)."""
+        any partitioning of the requested interval (deterministic). A wall
+        budget drops steps that cannot be computed in time - the trajectory
+        per simulated second is unchanged, only less simulated time passes."""
         dt = self.dt_dynamic
         self._time_debt += dt_total
         n = int(math.floor(self._time_debt / dt + 1e-9))
         self._time_debt -= n * dt
-        for _ in range(n):
+        self.budget_limited = False
+        t_end = time.perf_counter() + wall_budget_s if wall_budget_s else None
+        for k in range(n):
+            if t_end is not None and k > 0 and time.perf_counter() > t_end:
+                self.budget_limited = True
+                break
             try:
                 self._dynamic_step(dt)
             except DynamicSolverError as exc:
@@ -617,6 +691,7 @@ class SimulationEngine:
         self._mode_override = None
         if scenario.id != self.scenario.id:
             self._sand_inputs = None
+            self.sand_inputs_origin = self._preset_origin(scenario)
         self._load(scenario)
         self.events.add(0.0, "scenario", f"Scenario loaded: {scenario.name} ({self.mode} model)")
 
@@ -1079,6 +1154,7 @@ class SimulationEngine:
                 "solver_step_s": self.dt_dynamic if self.dyn is not None else self.settings.max_substep_s,
                 "fixed_step": self.dyn is not None,
                 "achieved_speed": self.achieved_speed,
+                "compute_limited": self.budget_limited,
                 "allowed_speeds": list(self.settings.allowed_time_scales),
             },
             "boundary": {
@@ -1112,7 +1188,7 @@ class SimulationEngine:
             snap["tag_aliases"] = {k: v.model_dump() for k, v in self.scenario.tag_aliases.items()}
             snap["fluid_models"] = ["single_phase"] + (["black_oil"] if self.scenario.black_oil is not None else [])
             si = self.sand_inputs
-            snap["sand_choke_inputs"] = si.model_dump() if si is not None else None
+            snap["sand_choke_inputs"] = si.model_dump(mode="json") if si is not None else None
             snap["sand_choke_example_available"] = self.scenario.sand_choke_example is not None
             snap["erosion_materials"] = [{"key": m.key, "name": m.name, "k": m.k, "n": m.n, "density_kg_m3": m.density,
                                           "behaviour": m.behaviour, "source": m.source} for m in MATERIALS.values()]

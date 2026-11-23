@@ -146,7 +146,8 @@ def test_training_rejects_out_of_sequence_answers():
 
 def test_training_api(client):
     sid = _new(client)
-    assert client.get("/api/training/exercises").json()[0]["id"] == "ex03_choke_operation"
+    ids = [x["id"] for x in client.get("/api/training/exercises").json()]
+    assert ids[0] == "ex01_familiarisation" and "ex03_choke_operation" in ids and len(ids) == 9
     r = client.post(f"/api/sessions/{sid}/training/start", json={"exercise_id": "ex03_choke_operation"})
     assert r.status_code == 200
     body = r.json()

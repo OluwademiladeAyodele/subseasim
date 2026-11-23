@@ -9,6 +9,7 @@ import type { Simulation } from "@/hooks/useSimulation";
 import type { DisplayPrefs } from "@/lib/units";
 import type { Selection } from "@/schematic/TreeSchematic";
 import { api, type IntegrityTestRequest } from "@/services/api";
+import type { Job } from "@/types/jobs";
 import type { ExerciseSummary, Layout, SandChokeInputs, ScenarioInfo, SimMode, SimulationState, ValveCommand } from "@/types/simulation";
 
 import type { RouteId } from "./routes";
@@ -39,7 +40,12 @@ export interface Actions {
   mpfmCalibrate: () => Promise<boolean>;
   sandInputs: (body: SandChokeInputs) => Promise<boolean>;
   sandExample: () => Promise<boolean>;
+  sandCsv: (csv: string, replace: boolean) => Promise<boolean>;
   sandFastForward: (days: number) => Promise<boolean>;
+  /** Start a background job; resolves to the job, or to an error message. */
+  startJob: (kind: string, params: Record<string, unknown>) => Promise<Job | string>;
+  jobStatus: (id: string) => Promise<Job>;
+  cancelJob: (id: string) => Promise<Job>;
   supply: (id: string, available: boolean) => Promise<boolean>;
   integrityStart: (req: IntegrityTestRequest) => Promise<boolean>;
   integrityAbort: (id: number) => Promise<boolean>;
@@ -129,7 +135,18 @@ export function WorkstationProvider({
       mpfmCalibrate: () => run((sid) => api.mpfmCalibrate(sid)),
       sandInputs: (b) => run((sid) => api.sandInputs(sid, b)),
       sandExample: () => run((sid) => api.sandExample(sid)),
+      sandCsv: (csv, replace) => run((sid) => api.sandCsv(sid, csv, replace)),
       sandFastForward: (d) => run((sid) => api.sandFastForward(sid, d)),
+      startJob: async (kind, params) => {
+        if (!sim.sessionId) return "no session";
+        try {
+          return await api.submitJob(sim.sessionId, kind, params);
+        } catch (e) {
+          return (e as Error).message;
+        }
+      },
+      jobStatus: (id) => api.getJob(id),
+      cancelJob: (id) => api.cancelJob(id),
       supply: (id, a) => run((sid) => api.supply(sid, id, a)),
       integrityStart: (req) => run((sid) => api.integrityStart(sid, req)),
       integrityAbort: (id) => run((sid) => api.integrityAbort(sid, id)),

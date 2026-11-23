@@ -1,4 +1,4 @@
-"""Sand production, sand transport, sand detection and choke-erosion INPUTS.
+"""Sand production, sand transport, sand detection, choke-erosion and choke-cavitation INPUTS.
 
 Every site-specific value is optional: a calculation that needs a missing
 input reports "unavailable - missing inputs: ..." instead of using a
@@ -10,9 +10,10 @@ docs/CHOKE_MAINTENANCE_MODEL.md.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Pos = Annotated[float, Field(gt=0)]
 NonNeg = Annotated[float, Field(ge=0)]
@@ -67,6 +68,30 @@ class CompletionInputs(_S):
     bridging_factor: Annotated[float, Field(ge=1, le=5)] = 2.0
 
 
+MeasuredUnit = Literal["kg_h", "kg_d", "g_s", "pptb", "ppm_mass_liquid", "ppm_mass_total", "ppm_vol_liquid"]
+MeasurementMethod = Literal["sand_trap", "acoustic_detector", "intrusive_probe", "well_test_sample", "other"]
+
+
+class SandMeasurement(_S):
+    """One measured produced-sand value (at the wellhead, after the screens)."""
+
+    timestamp: datetime
+    value: NonNeg
+    unit: MeasuredUnit = "kg_d"
+    method: MeasurementMethod = "other"
+    #: Relative standard uncertainty [%]; empty: the default measured uncertainty.
+    uncertainty_pct: NonNeg | None = None
+    #: Liquid rate and water cut when measured - needed to convert concentration units to kg/d.
+    liquid_rate_sm3_d: Pos | None = None
+    water_cut: Frac | None = None
+    d10_um: Pos | None = None
+    d50_um: Pos | None = None
+    d90_um: Pos | None = None
+    note: str | None = None
+    #: How the record entered SubseaSim (provenance).
+    source: Literal["manual", "csv_import"] = "manual"
+
+
 class SandInputs(_S):
     grain_density_kg_m3: Pos = 2650.0
     #: Formation particle-size distribution (sieve / laser) [micrometres].
@@ -77,9 +102,17 @@ class SandInputs(_S):
     mode: Literal["predictive", "measured"] = "predictive"
     #: Measured / configured produced sand (at the wellhead, i.e. after the screens).
     measured_value: NonNeg | None = None
-    measured_unit: Literal["kg_h", "kg_d", "g_s", "pptb", "ppm_mass_liquid", "ppm_mass_total", "ppm_vol_liquid"] = "kg_d"
+    measured_unit: MeasuredUnit = "kg_d"
     #: Relative standard uncertainty of the measured sand rate [%].
     measured_uncertainty_pct: NonNeg = 30.0
+    #: Measured sand history (CSV import or manual entry). In measured mode the LATEST record
+    #: sets the produced sand rate (overriding measured_value).
+    measurements: Annotated[list[SandMeasurement], Field(max_length=5000)] = Field(default_factory=list)
+    #: Abnormal-increase review trigger: latest rate > ratio x median of the previous N records
+    #: (and, if given, by at least the minimum increase). Configurable - not a safety limit.
+    abnormal_increase_ratio: Annotated[float, Field(gt=1, le=100)] = 2.0
+    abnormal_baseline_count: Annotated[int, Field(ge=1, le=50)] = 5
+    abnormal_min_increase_kg_d: NonNeg | None = None
     #: Predictive model: formation sand mass per m3 of produced liquid (reservoir conditions) at
     #: twice the critical drawdown [kg/m3]. MUST be calibrated (sand-trap / detector data).
     rate_coefficient_kg_m3: NonNeg | None = None
@@ -87,7 +120,7 @@ class SandInputs(_S):
 
 
 class DetectorInputs(_S):
-    tag: str = "XT3001"
+    tag: str = "SDT-101"
     detector_type: Literal["acoustic_non_intrusive", "intrusive_erosion_probe"] = "acoustic_non_intrusive"
     #: Calibration factor uncertainty (1 sigma) [%].
     calibration_uncertainty_pct: NonNeg = 25.0
@@ -194,12 +227,55 @@ class InspectionRecord(_S):
     trim_replaced: bool = False
 
 
+class FlPoint(_S):
+    opening_pct: Annotated[float, Field(ge=0, le=100)]
+    fl: Annotated[float, Field(gt=0, le=1)]
+
+
+class CavitationInputs(_S):
+    """Valve-specific cavitation data of the production choke trim. Every
+    value comes from the manufacturer or a PVT report; nothing is assumed."""
+
+    #: Liquid pressure-recovery factor FL (IEC 60534-2-1) of the trim, one value for all openings.
+    fl: Annotated[float, Field(gt=0, le=1)] | None = None
+    #: FL against opening (preferred when the vendor gives it); overrides ``fl``.
+    fl_table: list[FlPoint] = Field(default_factory=list)
+    fl_source: str | None = None
+    #: Cavitation index limits sigma = (P1 - Pv)/(P1 - P2) for this trim (ISA-RP75.23 form).
+    sigma_incipient: Pos | None = None
+    sigma_constant: Pos | None = None
+    #: Manufacturer's recommended minimum sigma (damage limit).
+    sigma_damage: Pos | None = None
+    threshold_source: str | None = None
+    #: Bubble point of the produced oil from a PVT report [bara]; overrides the correlation.
+    bubble_point_bara: Pos | None = None
+    #: Sensitivity band applied to the bubble point [%].
+    bubble_point_uncertainty_pct: Annotated[float, Field(ge=0, le=50)] = 10.0
+
+    @model_validator(mode="after")
+    def _ordered(self):
+        vals = [v for v in (self.sigma_incipient, self.sigma_constant, self.sigma_damage) if v is not None]
+        if any(a <= b for a, b in zip(vals, vals[1:])):
+            raise ValueError("sigma limits must decrease: incipient > constant > damage")
+        return self
+
+
+class ErosionalVelocityInputs(_S):
+    """API RP 14E erosional-velocity screening (supplementary indicator)."""
+
+    #: Empirical constant C (API RP 14E: 100 continuous, 125 intermittent service, US units; solids-free).
+    c_factor: Annotated[float, Field(gt=0, le=400)] = 100.0
+    c_source: str | None = "API RP 14E, continuous service (solids-free)"
+
+
 class SandChokeInputs(_S):
     geomechanics: GeomechanicsInputs = Field(default_factory=GeomechanicsInputs)
     completion: CompletionInputs = Field(default_factory=CompletionInputs)
     sand: SandInputs = Field(default_factory=SandInputs)
     detector: DetectorInputs = Field(default_factory=DetectorInputs)
     choke: ChokeTrimInputs = Field(default_factory=ChokeTrimInputs)
+    cavitation: CavitationInputs = Field(default_factory=CavitationInputs)
+    erosional_velocity: ErosionalVelocityInputs = Field(default_factory=ErosionalVelocityInputs)
     custom_materials: list[CustomMaterial] = Field(default_factory=list)
     acceptance: AcceptanceCriteria = Field(default_factory=AcceptanceCriteria)
     thresholds: HealthThresholds = Field(default_factory=HealthThresholds)
@@ -207,3 +283,12 @@ class SandChokeInputs(_S):
     inspections: list[InspectionRecord] = Field(default_factory=list)
     #: Trim service time already accumulated before the simulation starts [days].
     initial_service_days: NonNeg = 0.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rename_retired_detector_tag(cls, data):
+        # saves made before the plain-tag nomenclature call the detector XT3001
+        det = data.get("detector") if isinstance(data, dict) else None
+        if isinstance(det, dict) and det.get("tag") == "XT3001":
+            data = {**data, "detector": {**det, "tag": "SDT-101"}}
+        return data
